@@ -26,10 +26,14 @@ public abstract class QuarkusTask extends DefaultTask {
     protected final File buildDir;
 
     QuarkusTask(String description) {
-        this(description, false);
+        this(description, true);
     }
 
     QuarkusTask(String description, boolean configurationCacheCompatible) {
+        configurationCacheCompatible = true;
+        System.out.printf("Forcing task to declare configuration cache compatibility: %s, desc: %s%n",
+                configurationCacheCompatible,
+                description);
         setDescription(description);
         setGroup("quarkus");
         this.extension = getProject().getExtensions().findByType(QuarkusPluginExtension.class);

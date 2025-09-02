@@ -1,5 +1,7 @@
 package io.quarkus.gradle.dependency;
 
+import static io.quarkus.gradle.dependency.QuarkusComponentVariants.applyEnforcedPlatformConstraints;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -183,15 +185,7 @@ public class ConditionalDependenciesEnabler {
         // However, if we use a named configuration we run into issues preventing IDEs to import projects
         // (https://github.com/quarkusio/quarkus/issues/41825) and ./gradlew refreshVersions seems to break as well.
         Configuration conditionalDepConfiguration = project.getConfigurations().detachedConfiguration();
-        enforcedPlatforms.getExcludeRules().forEach(rule -> {
-            Map<String, String> excludeProperties = new HashMap<>();
-            excludeProperties.put("group", rule.getGroup());
-            excludeProperties.put("module", rule.getModule());
-            conditionalDepConfiguration.exclude(excludeProperties);
-        });
-        enforcedPlatforms.getAllDependencies().forEach(dependency -> {
-            conditionalDepConfiguration.getDependencies().add(dependency);
-        });
+        applyEnforcedPlatformConstraints(conditionalDepConfiguration, enforcedPlatforms);
         conditionalDepConfiguration.getDependencies().add(conditionalDep);
         return conditionalDepConfiguration;
     }

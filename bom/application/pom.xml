@@ -636,7 +636,7 @@
             <dependency>
                 <groupId>io.quarkus</groupId>
                 <artifactId>quarkus-arc-dev</artifactId>
-                <version>${project.version}</version>
+                <version>3.25.0</version>
             </dependency>
             <dependency>
                 <groupId>io.quarkus</groupId>
@@ -1247,7 +1247,7 @@
             <dependency>
                 <groupId>io.quarkus</groupId>
                 <artifactId>quarkus-flyway-dev</artifactId>
-                <version>${project.version}</version>
+                <version>3.25.0</version>
             </dependency>
             <dependency>
                 <groupId>io.quarkus</groupId>
@@ -2867,7 +2867,7 @@
             <dependency>
                 <groupId>io.quarkus</groupId>
                 <artifactId>quarkus-rest-kotlin</artifactId>
-                <version>${project.version}</version>
+                <version>3.25.0</version>
             </dependency>
             <dependency>
                 <groupId>io.quarkus</groupId>

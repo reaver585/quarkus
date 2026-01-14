@@ -40,6 +40,7 @@ public final class BuildChainBuilder {
     private final Map<BuildStepBuilder, StackTraceElement[]> steps = new LinkedHashMap<BuildStepBuilder, StackTraceElement[]>();
     private final Set<ItemId> initialIds = new HashSet<>();
     private final Set<ItemId> finalIds = new LinkedHashSet<>();
+    private String priorityBuildItemClassName;
     private ClassLoader classLoader = BuildChainBuilder.class.getClassLoader();
 
     BuildChainBuilder() {
@@ -146,6 +147,15 @@ public final class BuildChainBuilder {
         this.classLoader = classLoader;
     }
 
+    public BuildChainBuilder setPriorityBuildItemClassName(String buildItemClassName) {
+        this.priorityBuildItemClassName = buildItemClassName;
+        return this;
+    }
+
+    String getPriorityBuildItemClassName() {
+        return priorityBuildItemClassName;
+    }
+
     /**
      * Build the build step chain from the current builder configuration.
      *
@@ -155,6 +165,9 @@ public final class BuildChainBuilder {
     public BuildChain build() throws ChainBuildException {
         final Set<BuildStepBuilder> included = new LinkedHashSet<>(); // the set of steps already included to avoid duplicates
         Map<BuildStepBuilder, Set<Produce>> dependencies = wireDependencies(included);
+        if (getPriorityBuildItemClassName() != null) {
+            BuildStepPrioritizer.prioritize(getPriorityBuildItemClassName(), included, dependencies);
+        }
 
         detectCycles(included, dependencies);
 

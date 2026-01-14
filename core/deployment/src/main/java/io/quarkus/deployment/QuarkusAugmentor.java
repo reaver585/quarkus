@@ -1,5 +1,7 @@
 package io.quarkus.deployment;
 
+import static io.quarkus.builder.BuildStepPrioritizer.LOGGING_SETUP_BUILD_ITEM_CLASS;
+
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -114,6 +116,8 @@ public class QuarkusAugmentor {
 
             Thread.currentThread().setContextClassLoader(classLoader);
             chainBuilder.loadProviders(classLoader);
+
+            chainBuilder.setPriorityBuildItemClassName(LOGGING_SETUP_BUILD_ITEM_CLASS);
 
             chainBuilder
                     .addInitial(QuarkusBuildCloseablesBuildItem.class)

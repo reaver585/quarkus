@@ -20,6 +20,13 @@
     </properties>
 
     <dependencies>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-bootstrap-bom</artifactId>
+            <version>${project.version}</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
         <!-- Compile -->
         <dependency>
             <groupId>io.quarkus</groupId>

@@ -149,7 +149,7 @@ class BuildStepPrioritizerTest {
     void consumesMultiBuildItemsInProducingOrdinalOrder2() throws ChainBuildException, BuildException {
         List<String> consumedOrder = new ArrayList<>();
         BuildChainBuilder chainBuilder = setupChainBuilder(consumedOrder);
-        chainBuilder.setPriorityBuildItemClassName(LoggingSetupBuildItem.class.getName());
+        chainBuilder.addPriorityItem(LoggingSetupBuildItem.class);
         chainBuilder.build().createExecutionBuilder("ordering-test").execute();
         // With logging prioritized, config bytecode comes first (as a dependency of logging), then logging, then feature
         assertEquals(List.of("bytecode-from-base-config", "bytecode-from-logging", "bytecode-from-feature"), consumedOrder);

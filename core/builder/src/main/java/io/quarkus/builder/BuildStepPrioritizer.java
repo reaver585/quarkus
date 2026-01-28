@@ -12,12 +12,7 @@ import java.util.Set;
  * a dependency of every other step that does not already depend on it (directly or transitively).
  * This is useful for items that need to be available for most build steps (for example logging setup).
  */
-public final class BuildStepPrioritizer {
-
-    /**
-     * Default build item to prioritize when the caller wants logging available early.
-     */
-    public static final String LOGGING_SETUP_BUILD_ITEM_CLASS = "io.quarkus.deployment.logging.LoggingSetupBuildItem";
+final class BuildStepPrioritizer {
 
     private BuildStepPrioritizer() {
         // Utility class - prevent instantiation
@@ -27,16 +22,25 @@ public final class BuildStepPrioritizer {
      * Prioritizes the given build item by making its producing step a dependency of all other build
      * steps that are not already in that producing step's dependency chain.
      *
-     * @param buildItemClassName the fully qualified name of the build item to prioritize
+     * @param itemsIdsToPrioritize the set of build items IDs to prioritize
      * @param includedSteps the set of build steps included in the build chain
      * @param dependencies a map from each build step to the set of {@link Produce} items it depends on
      */
     static void prioritize(
-            String buildItemClassName,
+            Set<ItemId> itemsIdsToPrioritize,
+            Set<BuildStepBuilder> includedSteps,
+            Map<BuildStepBuilder, Set<Produce>> dependencies) {
+        for (ItemId itemId : itemsIdsToPrioritize) {
+            prioritizeOne(itemId, includedSteps, dependencies);
+        }
+    }
+
+    private static void prioritizeOne(
+            ItemId itemId,
             Set<BuildStepBuilder> includedSteps,
             Map<BuildStepBuilder, Set<Produce>> dependencies) {
 
-        ItemInfo itemInfo = findItemInfo(includedSteps, buildItemClassName);
+        ItemInfo itemInfo = findItemInfo(includedSteps, itemId);
         if (itemInfo == null) {
             // item info not found; nothing to prioritize
             return;
@@ -58,10 +62,10 @@ public final class BuildStepPrioritizer {
      * @return the build item step info, or {@code null} if the step was not found
      */
     private static ItemInfo findItemInfo(Set<BuildStepBuilder> includedSteps,
-            String buildItemClassName) {
+            ItemId itemToFind) {
         for (BuildStepBuilder stepBuilder : includedSteps) {
             for (ItemId itemId : stepBuilder.getProduces().keySet()) {
-                if (buildItemClassName.equals(itemId.getType().getName())) {
+                if (itemToFind.equals(itemId)) {
                     if (itemId.isMulti()) {
                         // not supported now for multi build items
                         return null;

@@ -156,15 +156,13 @@ public class DependencyInfoCollector {
         // Configuration to scope mapping:
         // api/implementation -> compile
         // runtimeOnly -> runtime
-        // compileOnly -> compile
+        // compileOnly -> ignored altogether
         // test* -> test
         final List<DeclaredDependency> declaredDeps = new ArrayList<>();
 
         addDeclaredFromConfig(project, JavaPlugin.API_CONFIGURATION_NAME,
                 io.quarkus.maven.dependency.Dependency.SCOPE_COMPILE, declaredDeps);
         addDeclaredFromConfig(project, JavaPlugin.IMPLEMENTATION_CONFIGURATION_NAME,
-                io.quarkus.maven.dependency.Dependency.SCOPE_COMPILE, declaredDeps);
-        addDeclaredFromConfig(project, JavaPlugin.COMPILE_ONLY_CONFIGURATION_NAME,
                 io.quarkus.maven.dependency.Dependency.SCOPE_COMPILE, declaredDeps);
         addDeclaredFromConfig(project, JavaPlugin.RUNTIME_ONLY_CONFIGURATION_NAME, SCOPE_RUNTIME, declaredDeps);
         if (collectTestScopes) {

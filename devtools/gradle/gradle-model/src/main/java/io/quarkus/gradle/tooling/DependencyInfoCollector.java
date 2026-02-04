@@ -164,7 +164,8 @@ public class DependencyInfoCollector {
 
         addDeclaredFromConfig(project, JavaPlugin.API_CONFIGURATION_NAME,
                 io.quarkus.maven.dependency.Dependency.SCOPE_COMPILE, declaredDeps);
-        addDeclaredFromConfig(project, JavaPlugin.IMPLEMENTATION_CONFIGURATION_NAME, SCOPE_RUNTIME, declaredDeps);
+        addDeclaredFromConfig(project, JavaPlugin.IMPLEMENTATION_CONFIGURATION_NAME,
+                io.quarkus.maven.dependency.Dependency.SCOPE_COMPILE, declaredDeps);
         addDeclaredFromConfig(project, JavaPlugin.COMPILE_ONLY_CONFIGURATION_NAME,
                 io.quarkus.maven.dependency.Dependency.SCOPE_COMPILE, declaredDeps);
         addDeclaredFromConfig(project, JavaPlugin.RUNTIME_ONLY_CONFIGURATION_NAME, SCOPE_RUNTIME, declaredDeps);

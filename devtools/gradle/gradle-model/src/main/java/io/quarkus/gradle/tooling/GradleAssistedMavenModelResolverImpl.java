@@ -81,7 +81,7 @@ public class GradleAssistedMavenModelResolverImpl implements ModelResolver {
         };
     }
 
-    private @Nullable File resolvePomViaQuery(String groupId, String artifactId, String version) {
+    private File resolvePomViaQuery(String groupId, String artifactId, String version) {
         @SuppressWarnings("unchecked")
         var componentId = project.getDependencies()
                 .createArtifactResolutionQuery()

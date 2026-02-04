@@ -122,7 +122,7 @@ public class GradleApplicationModelBuilder implements ParameterizedToolingModelB
 
         DependencyInfoCollector depInfoCollector = new DependencyInfoCollector(project);
         final ResolvedDependencyBuilder appArtifact = getProjectArtifact(project, workspaceDiscovery);
-        depInfoCollector.collectProjectArtifact(appArtifact.getKey(), project);
+        depInfoCollector.collectProjectArtifact(appArtifact.getKey(), project, mode);
         final ApplicationModelBuilder modelBuilder = new ApplicationModelBuilder()
                 .setAppArtifact(appArtifact)
                 .addReloadableWorkspaceModule(appArtifact.getKey())
@@ -139,15 +139,10 @@ public class GradleApplicationModelBuilder implements ParameterizedToolingModelB
 
         addCompileOnly(project, classpathBuilder, modelBuilder, depInfoCollector);
 
-        DependencyInfoCollector.setDirectDeps(
-                modelBuilder.getApplicationArtifact(),
-                depInfoCollector.get(appArtifact.getKey()),
-                modelBuilder,
-                mode,
-                project.getLogger());
+        depInfoCollector.setDirectDeps(
+                modelBuilder.getApplicationArtifact(), modelBuilder);
         for (var dep : modelBuilder.getDependencies()) {
-            DependencyInfoCollector.setDirectDeps(dep, depInfoCollector.get(dep.getKey()), modelBuilder, mode,
-                    project.getLogger());
+            depInfoCollector.setDirectDeps(dep, modelBuilder);
         }
 
         return modelBuilder.build();

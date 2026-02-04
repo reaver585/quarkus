@@ -50,29 +50,19 @@ public class DependencyInfoCollector {
         logger = project.getLogger();
     }
 
-    public static void setDirectDeps(
+    public void setDirectDeps(
             ResolvedDependencyBuilder depBuilder,
-            List<DependencyInfoCollector.DeclaredDependency> declaredDeps,
-            ApplicationModelBuilder modelBuilder,
-            LaunchMode mode,
-            Logger logger) {
-
+            ApplicationModelBuilder modelBuilder) {
+        final List<DeclaredDependency> declaredDeps = declaredDepsByArtifactKey.get(depBuilder.getKey());
         if (declaredDeps == null) {
             logger.info("Declared dependencies not found for {}", depBuilder.getArtifactCoords().toGACTVString());
             return;
         }
 
-        final boolean includeTestScopes = LaunchMode.TEST.equals(mode)
-                && (depBuilder.isDirect()
-                        || depBuilder == modelBuilder.getApplicationArtifact());
-        final List<DeclaredDependency> filteredDeclaredDeps = includeTestScopes
-                ? declaredDeps
-                : filterTestScopes(declaredDeps);
+        final List<io.quarkus.maven.dependency.Dependency> directDeps = new ArrayList<>(declaredDeps.size());
+        final List<ArtifactCoords> depCoords = new ArrayList<>(declaredDeps.size());
 
-        final List<io.quarkus.maven.dependency.Dependency> directDeps = new ArrayList<>(filteredDeclaredDeps.size());
-        final List<ArtifactCoords> depCoords = new ArrayList<>(filteredDeclaredDeps.size());
-
-        for (var declaredDep : filteredDeclaredDeps) {
+        for (var declaredDep : declaredDeps) {
             var builder = DependencyBuilder.newInstance()
                     .setGroupId(declaredDep.getGroupId())
                     .setArtifactId(declaredDep.getArtifactId())
@@ -111,11 +101,17 @@ public class DependencyInfoCollector {
         if (depBuilder == null) {
             return;
         }
+
+        // We already collected it
         final ArtifactKey artifactKey = depBuilder.getKey();
+        if (declaredDepsByArtifactKey.containsKey(artifactKey)) {
+            return;
+        }
+
         // Project component -> declared deps must come from the target Gradle project
         if (componentId instanceof ProjectComponentIdentifier compId) {
             final Project targetProject = resolveProjectComponent(rootProject, compId);
-            final List<DeclaredDependency> declared = collectDeclaredFromProject(targetProject);
+            final List<DeclaredDependency> declared = collectDeclaredFromProject(targetProject, false);
             declaredDepsByArtifactKey.put(artifactKey, declared);
             return;
         }
@@ -124,14 +120,16 @@ public class DependencyInfoCollector {
         final Model model = resolvePomAndBuildModel(gav.getGroupId(), gav.getArtifactId(), gav.getVersion(), modelResolver);
         if (model != null) {
             final List<DeclaredDependency> declared = model.getDependencies().stream()
+                    // all test scope dependencies are ignored for module components
+                    .filter(dep -> !SCOPE_TEST.equals(dep.getScope()))
                     .map(DeclaredDependency::new)
                     .toList();
             declaredDepsByArtifactKey.put(artifactKey, declared);
         }
     }
 
-    public void collectProjectArtifact(ArtifactKey appKey, Project appProject) {
-        List<DeclaredDependency> declaredDeps = collectDeclaredFromProject(appProject);
+    public void collectProjectArtifact(ArtifactKey appKey, Project appProject, LaunchMode mode) {
+        List<DeclaredDependency> declaredDeps = collectDeclaredFromProject(appProject, LaunchMode.TEST.equals(mode));
         declaredDepsByArtifactKey.put(appKey, declaredDeps);
     }
 
@@ -154,12 +152,12 @@ public class DependencyInfoCollector {
         throw new GradleException("Failed to resolve project component for " + compId.getDisplayName());
     }
 
-    private List<DeclaredDependency> collectDeclaredFromProject(Project project) {
+    private List<DeclaredDependency> collectDeclaredFromProject(Project project, boolean collectTestScopes) {
         // Configuration to scope mapping:
         // api -> compile
         // implementation/runtimeOnly -> runtime
-        // compileOnly -> compile (even though not published)
-        // test* -> test (not published, filtered for non-test modes)
+        // compileOnly -> compile
+        // test* -> test
         final List<DeclaredDependency> declaredDeps = new ArrayList<>();
 
         addDeclaredFromConfig(project, JavaPlugin.API_CONFIGURATION_NAME,
@@ -169,9 +167,11 @@ public class DependencyInfoCollector {
         addDeclaredFromConfig(project, JavaPlugin.COMPILE_ONLY_CONFIGURATION_NAME,
                 io.quarkus.maven.dependency.Dependency.SCOPE_COMPILE, declaredDeps);
         addDeclaredFromConfig(project, JavaPlugin.RUNTIME_ONLY_CONFIGURATION_NAME, SCOPE_RUNTIME, declaredDeps);
-        addDeclaredFromConfig(project, JavaPlugin.TEST_IMPLEMENTATION_CONFIGURATION_NAME, SCOPE_TEST, declaredDeps);
-        addDeclaredFromConfig(project, JavaPlugin.TEST_RUNTIME_ONLY_CONFIGURATION_NAME, SCOPE_TEST, declaredDeps);
-        addDeclaredFromConfig(project, JavaPlugin.TEST_COMPILE_ONLY_CONFIGURATION_NAME, SCOPE_TEST, declaredDeps);
+        if (collectTestScopes) {
+            addDeclaredFromConfig(project, JavaPlugin.TEST_IMPLEMENTATION_CONFIGURATION_NAME, SCOPE_TEST, declaredDeps);
+            addDeclaredFromConfig(project, JavaPlugin.TEST_RUNTIME_ONLY_CONFIGURATION_NAME, SCOPE_TEST, declaredDeps);
+            addDeclaredFromConfig(project, JavaPlugin.TEST_COMPILE_ONLY_CONFIGURATION_NAME, SCOPE_TEST, declaredDeps);
+        }
 
         return deduplicate(declaredDeps);
     }

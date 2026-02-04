@@ -147,19 +147,16 @@ public abstract class QuarkusApplicationModelTask extends DefaultTask {
                 .setPlatformImports(getPlatformInfo().resolvePlatformImports())
                 .addReloadableWorkspaceModule(appArtifact.getKey());
 
+        LaunchMode mode = getLaunchMode().get();
         DependencyInfoCollector deoInfoCollector = new DependencyInfoCollector(getProject());
-        deoInfoCollector.collectProjectArtifact(appArtifact.getKey(), getProject());
+        deoInfoCollector.collectProjectArtifact(appArtifact.getKey(), getProject(), mode);
         collectDependencies(getAppClasspath(), modelBuilder, projectDescriptor.getWorkspaceModule(), projectDescriptor,
                 deoInfoCollector);
         collectExtensionDependencies(getDeploymentClasspath(), modelBuilder, deoInfoCollector);
 
-        DependencyInfoCollector.setDirectDeps(
-                appArtifact, deoInfoCollector.get(appArtifact.getKey()),
-                modelBuilder, getLaunchMode().get(), getProject().getLogger());
+        deoInfoCollector.setDirectDeps(appArtifact, modelBuilder);
         for (ResolvedDependencyBuilder dep : modelBuilder.getDependencies()) {
-            DependencyInfoCollector.setDirectDeps(
-                    dep, deoInfoCollector.get(dep.getKey()),
-                    modelBuilder, getLaunchMode().get(), getProject().getLogger());
+            deoInfoCollector.setDirectDeps(dep, modelBuilder);
         }
 
         DefaultApplicationModel model = modelBuilder.build();

@@ -154,8 +154,8 @@ public class DependencyInfoCollector {
 
     private List<DeclaredDependency> collectDeclaredFromProject(Project project, boolean collectTestScopes) {
         // Configuration to scope mapping:
-        // api -> compile
-        // implementation/runtimeOnly -> runtime
+        // api/implementation -> compile
+        // runtimeOnly -> runtime
         // compileOnly -> compile
         // test* -> test
         final List<DeclaredDependency> declaredDeps = new ArrayList<>();

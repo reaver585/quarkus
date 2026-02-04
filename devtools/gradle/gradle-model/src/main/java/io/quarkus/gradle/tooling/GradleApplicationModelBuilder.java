@@ -64,6 +64,7 @@ import io.quarkus.maven.dependency.ArtifactCoords;
 import io.quarkus.maven.dependency.ArtifactDependency;
 import io.quarkus.maven.dependency.ArtifactKey;
 import io.quarkus.maven.dependency.DependencyFlags;
+import io.quarkus.maven.dependency.GAV;
 import io.quarkus.maven.dependency.ResolvedDependencyBuilder;
 import io.quarkus.paths.PathCollection;
 import io.quarkus.paths.PathList;
@@ -320,7 +321,9 @@ public class GradleApplicationModelBuilder implements ParameterizedToolingModelB
                     modelBuilder.addDependency(dep);
                     clearReloadableFlag = true;
                 }
-                depInfoCollector.collect(a, dep, project);
+                var moduleId = a.getModuleVersion().getId();
+                depInfoCollector.collect(a.getId().getComponentIdentifier(),
+                        new GAV(moduleId.getGroup(), moduleId.getName(), moduleId.getVersion()), dep, project);
             }
             if (dep != null) {
                 if (dep.isRuntimeExtensionArtifact()) {
@@ -367,7 +370,9 @@ public class GradleApplicationModelBuilder implements ParameterizedToolingModelB
                 dep = toDependency(a);
                 modelBuilder.addDependency(dep);
             }
-            depInfoCollector.collect(a, dep, project);
+            var moduleId = a.getModuleVersion().getId();
+            depInfoCollector.collect(a.getId().getComponentIdentifier(),
+                    new GAV(moduleId.getGroup(), moduleId.getName(), moduleId.getVersion()), dep, project);
         } else {
             dep.setDeploymentCp();
             dep.clearFlag(DependencyFlags.RELOADABLE);
@@ -495,7 +500,9 @@ public class GradleApplicationModelBuilder implements ParameterizedToolingModelB
                     artifactFiles.add(a.getFile());
                 }
 
-                depInfoCollector.collect(a, depBuilder, project);
+                var moduleId = a.getModuleVersion().getId();
+                depInfoCollector.collect(a.getId().getComponentIdentifier(),
+                        new GAV(moduleId.getGroup(), moduleId.getName(), moduleId.getVersion()), depBuilder, project);
             }
             if (projectModule == null && depBuilder.getWorkspaceModule() != null) {
                 projectModule = depBuilder.getWorkspaceModule().mutable();

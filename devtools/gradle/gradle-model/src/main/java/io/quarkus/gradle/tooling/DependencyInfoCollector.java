@@ -1,7 +1,5 @@
 package io.quarkus.gradle.tooling;
 
-import static io.quarkus.gradle.tooling.dependency.DependencyUtils.getKey;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -20,7 +18,7 @@ import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.ExternalModuleDependency;
 import org.gradle.api.artifacts.ProjectDependency;
-import org.gradle.api.artifacts.ResolvedArtifact;
+import org.gradle.api.artifacts.component.ComponentIdentifier;
 import org.gradle.api.artifacts.component.ProjectComponentIdentifier;
 import org.gradle.api.initialization.IncludedBuild;
 import org.gradle.api.logging.Logger;
@@ -32,10 +30,11 @@ import io.quarkus.maven.dependency.ArtifactCoords;
 import io.quarkus.maven.dependency.ArtifactKey;
 import io.quarkus.maven.dependency.DependencyBuilder;
 import io.quarkus.maven.dependency.DependencyFlags;
+import io.quarkus.maven.dependency.GAV;
 import io.quarkus.maven.dependency.ResolvedDependencyBuilder;
 import io.quarkus.runtime.LaunchMode;
 
-class DependencyInfoCollector {
+public class DependencyInfoCollector {
 
     private static final String SCOPE_RUNTIME = "runtime";
     private static final String SCOPE_TEST = "test";
@@ -45,13 +44,13 @@ class DependencyInfoCollector {
     private final DefaultModelBuilder builder;
     private final Logger logger;
 
-    DependencyInfoCollector(Project project) {
+    public DependencyInfoCollector(Project project) {
         this.modelResolver = new GradleAssistedMavenModelResolverImpl(project);
         builder = new DefaultModelBuilderFactory().newInstance();
         logger = project.getLogger();
     }
 
-    static void setDirectDeps(
+    public static void setDirectDeps(
             ResolvedDependencyBuilder depBuilder,
             List<DependencyInfoCollector.DeclaredDependency> declaredDeps,
             ApplicationModelBuilder modelBuilder,
@@ -108,10 +107,13 @@ class DependencyInfoCollector {
                 .setDirectDependencies(directDeps);
     }
 
-    void collect(ResolvedArtifact artifact, ResolvedDependencyBuilder depBuilder, Project rootProject) {
-        final ArtifactKey artifactKey = getKey(artifact);
+    public void collect(ComponentIdentifier componentId, GAV gav, ResolvedDependencyBuilder depBuilder, Project rootProject) {
+        if (depBuilder == null) {
+            return;
+        }
+        final ArtifactKey artifactKey = depBuilder.getKey();
         // Project component -> declared deps must come from the target Gradle project
-        if (artifact.getId().getComponentIdentifier() instanceof ProjectComponentIdentifier compId) {
+        if (componentId instanceof ProjectComponentIdentifier compId) {
             final Project targetProject = resolveProjectComponent(rootProject, compId);
             final List<DeclaredDependency> declared = collectDeclaredFromProject(targetProject);
             declaredDepsByArtifactKey.put(artifactKey, declared);
@@ -119,7 +121,7 @@ class DependencyInfoCollector {
         }
 
         // External module -> collect via POM resolution
-        final Model model = resolvePomAndBuildModel(artifact, modelResolver);
+        final Model model = resolvePomAndBuildModel(gav.getGroupId(), gav.getArtifactId(), gav.getVersion(), modelResolver);
         if (model != null) {
             final List<DeclaredDependency> declared = model.getDependencies().stream()
                     .map(DeclaredDependency::new)
@@ -128,12 +130,12 @@ class DependencyInfoCollector {
         }
     }
 
-    void collectProjectArtifact(ArtifactKey appKey, Project appProject) {
+    public void collectProjectArtifact(ArtifactKey appKey, Project appProject) {
         List<DeclaredDependency> declaredDeps = collectDeclaredFromProject(appProject);
         declaredDepsByArtifactKey.put(appKey, declaredDeps);
     }
 
-    List<DeclaredDependency> get(ArtifactKey artifactKey) {
+    public List<DeclaredDependency> get(ArtifactKey artifactKey) {
         return declaredDepsByArtifactKey.get(artifactKey);
     }
 
@@ -160,12 +162,11 @@ class DependencyInfoCollector {
         // test* -> test (not published, filtered for non-test modes)
         final List<DeclaredDependency> declaredDeps = new ArrayList<>();
 
-        addDeclaredFromConfig(project, JavaPlugin.API_CONFIGURATION_NAME, io.quarkus.maven.dependency.Dependency.SCOPE_COMPILE,
-                declaredDeps);
+        addDeclaredFromConfig(project, JavaPlugin.API_CONFIGURATION_NAME,
+                io.quarkus.maven.dependency.Dependency.SCOPE_COMPILE, declaredDeps);
         addDeclaredFromConfig(project, JavaPlugin.IMPLEMENTATION_CONFIGURATION_NAME, SCOPE_RUNTIME, declaredDeps);
         addDeclaredFromConfig(project, JavaPlugin.COMPILE_ONLY_CONFIGURATION_NAME,
-                io.quarkus.maven.dependency.Dependency.SCOPE_COMPILE,
-                declaredDeps);
+                io.quarkus.maven.dependency.Dependency.SCOPE_COMPILE, declaredDeps);
         addDeclaredFromConfig(project, JavaPlugin.RUNTIME_ONLY_CONFIGURATION_NAME, SCOPE_RUNTIME, declaredDeps);
         addDeclaredFromConfig(project, JavaPlugin.TEST_IMPLEMENTATION_CONFIGURATION_NAME, SCOPE_TEST, declaredDeps);
         addDeclaredFromConfig(project, JavaPlugin.TEST_RUNTIME_ONLY_CONFIGURATION_NAME, SCOPE_TEST, declaredDeps);
@@ -186,8 +187,8 @@ class DependencyInfoCollector {
                         emd.getGroup(),
                         emd.getName(),
                         emd.getVersion(),
-                        null,
-                        null,
+                        null, // TODO: clarify
+                        null, // TODO: clarify
                         scope,
                         false));
                 continue;
@@ -201,9 +202,9 @@ class DependencyInfoCollector {
                 out.add(new DeclaredDependency(
                         String.valueOf(dp.getGroup()),
                         dp.getName(),
-                        String.valueOf(dp.getVersion()),
-                        null,
-                        null,
+                        String.valueOf(dp.getVersion()), // TODO: this may have value "unspecified"
+                        null, // TODO: clarify
+                        null, // TODO: clarify
                         scope,
                         false));
             }
@@ -241,17 +242,13 @@ class DependencyInfoCollector {
         return value == null ? fallback : value;
     }
 
-    private Model resolvePomAndBuildModel(ResolvedArtifact artifact, GradleAssistedMavenModelResolverImpl modelResolver) {
+    private Model resolvePomAndBuildModel(String groupId, String artifactId, String version,
+            GradleAssistedMavenModelResolverImpl modelResolver) {
         try {
-            var coords = artifact.getModuleVersion().getId();
-            String groupId = coords.getGroup();
-            String artifactId = coords.getName();
-            String version = coords.getVersion();
-
             // build the effective model
             return buildEffectiveModel(groupId, artifactId, version, modelResolver);
         } catch (Exception e) {
-            logger.info("Failed to resolve POM for {}: {}", artifact.getName(), e.getMessage());
+            logger.info("Failed to resolve POM for {}:{}:{}: {}", groupId, artifactId, version, e.getMessage());
             return null;
         }
     }
@@ -276,7 +273,7 @@ class DependencyInfoCollector {
         }
     }
 
-    static class DeclaredDependency {
+    public static class DeclaredDependency {
 
         private final String groupId;
         private final String artifactId;

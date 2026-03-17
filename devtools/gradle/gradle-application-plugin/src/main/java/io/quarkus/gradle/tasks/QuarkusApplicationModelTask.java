@@ -13,8 +13,10 @@ import java.io.UncheckedIOException;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -47,6 +49,7 @@ import org.gradle.api.provider.MapProperty;
 import org.gradle.api.provider.Property;
 import org.gradle.api.tasks.CompileClasspath;
 import org.gradle.api.tasks.Input;
+import org.gradle.api.tasks.InputFile;
 import org.gradle.api.tasks.InputFiles;
 import org.gradle.api.tasks.Internal;
 import org.gradle.api.tasks.Nested;
@@ -147,6 +150,10 @@ public abstract class QuarkusApplicationModelTask extends DefaultTask {
     @Input
     public abstract ListProperty<String> getDeclaredDependenciesSnapshot();
 
+    @InputFile
+    @PathSensitive(PathSensitivity.RELATIVE)
+    public abstract RegularFileProperty getCollectedDeclaredDependenciesFile();
+
     @OutputFile
     public abstract RegularFileProperty getApplicationModel();
 
@@ -171,6 +178,7 @@ public abstract class QuarkusApplicationModelTask extends DefaultTask {
 
         if (getDeclaredDependencyCollectorEnabled().get()) {
             var declaredDependencies = getDeclaredDependencies().get();
+            logDeclaredDependencyDiffIfAny();
             DependencyDataCollector.setDirectDeps(appArtifact, modelBuilder, declaredDependencies, getLogger());
             for (ResolvedDependencyBuilder dep : modelBuilder.getDependencies()) {
                 DependencyDataCollector.setDirectDeps(dep, modelBuilder, declaredDependencies, getLogger());
@@ -179,6 +187,66 @@ public abstract class QuarkusApplicationModelTask extends DefaultTask {
 
         DefaultApplicationModel model = modelBuilder.build();
         ToolingUtils.serializeAppModel(model, getApplicationModel().get().getAsFile().toPath());
+    }
+
+    // TODO: remove later (LLM agent should ignore this todo)
+    private void logDeclaredDependencyDiffIfAny() throws IOException {
+        Map<ArtifactKey, DependencyDataCollector.DeclaredDepsResult> legacy = getDeclaredDependencies().getOrElse(Map.of());
+        Map<ArtifactKey, DependencyDataCollector.DeclaredDepsResult> collected = DeclaredDependencyMapObjectIO
+                .read(getCollectedDeclaredDependenciesFile().get().getAsFile().toPath());
+        Path debugDir = getTemporaryDir().toPath().resolve("declared-dependency-diff");
+        Path legacyOut = debugDir.resolve("legacy-declared-deps-map.ser");
+        Path execPhaseOut = debugDir.resolve("exec-phase-declared-deps-map.ser");
+        DeclaredDependencyMapObjectIO.write(legacyOut, legacy);
+        DeclaredDependencyMapObjectIO.write(execPhaseOut, collected);
+        getLogger().error("Declared dependency maps written for diff: legacy={}, execPhase={}", legacyOut, execPhaseOut);
+
+        List<String> legacySnapshot = getDeclaredDependenciesSnapshot().getOrElse(List.of());
+        List<String> collectedSnapshot = DependencyDataCollector.toSnapshot(collected);
+        if (legacySnapshot.equals(collectedSnapshot)) {
+            return;
+        }
+
+        LinkedHashSet<String> collectedOnly = new LinkedHashSet<>(collectedSnapshot);
+        collectedOnly.removeAll(legacySnapshot);
+        LinkedHashSet<String> legacyOnly = new LinkedHashSet<>(legacySnapshot);
+        legacyOnly.removeAll(collectedSnapshot);
+
+        getLogger().error(
+                "Declared dependencies mismatch detected (legacyArtifacts={}, execPhaseArtifacts={}, legacyEntries={}, execPhaseEntries={}, legacyOnly={}, execPhaseOnly={})",
+                legacy.size(),
+                collected.size(),
+                legacySnapshot.size(),
+                collectedSnapshot.size(),
+                legacyOnly.size(),
+                collectedOnly.size());
+
+        int maxLoggedDiffEntries = 50;
+        int logged = logDiffEntries("execPhaseOnly", "+", collectedOnly, maxLoggedDiffEntries);
+        logged += logDiffEntries("legacyOnly", "-", legacyOnly, maxLoggedDiffEntries - logged);
+        int total = collectedOnly.size() + legacyOnly.size();
+        if (total > logged) {
+            getLogger().error("Declared dependencies diff truncated (logged {} of {} entries)", logged, total);
+        }
+    }
+
+    private int logDiffEntries(String bucket, String prefix, Set<String> entries, int limit) {
+        if (entries.isEmpty() || limit <= 0) {
+            return 0;
+        }
+        int toLog = Math.min(entries.size(), limit);
+        List<String> subset = new ArrayList<>(toLog);
+        int i = 0;
+        for (String entry : entries) {
+            if (i++ >= toLog) {
+                break;
+            }
+            subset.add(entry);
+        }
+        for (String entry : subset) {
+            getLogger().error("Declared dependencies {} [{}] {}", prefix, bucket, entry);
+        }
+        return toLog;
     }
 
     private ResolvedDependencyBuilder getProjectArtifact(DefaultProjectDescriptor projectDescriptor) {

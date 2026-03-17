@@ -167,7 +167,7 @@ public class DependencyDataCollector {
             return Collections.emptyMap();
         }
 
-        var startTime = project.getLogger().isDebugEnabled() ? System.currentTimeMillis() : -1;
+        var startTime = System.currentTimeMillis();
         ArtifactCollection artifacts = configuration.getIncoming().getArtifacts();
         boolean isTestConfig = configuration.getName().toLowerCase().contains("test");
         MavenModelResolutionTaskRunner taskRunner = new MavenModelResolutionTaskRunner((task, error) -> project.getLogger()
@@ -183,11 +183,46 @@ public class DependencyDataCollector {
             }
         }
         taskRunner.waitForCompletion();
-        if (startTime > 0) {
-            project.getLogger().debug("Declared dependencies collection for configuration {} took {} ms",
-                    configuration.getName(), System.currentTimeMillis() - startTime);
-        }
+        project.getLogger().info("Declared dependencies collection for configuration {} took {} ms",
+                configuration.getName(), System.currentTimeMillis() - startTime);
         return result;
+    }
+
+    public DeclaredDependencyInputs collectDeclaredDependencyInputs(Project project, Configuration configuration) {
+        if (!declaredDependencyCollectorEnabled(project)) {
+            return new DeclaredDependencyInputs(Map.of(), List.of());
+        }
+
+        ArtifactCollection artifacts = configuration.getIncoming().getArtifacts();
+        boolean isTestConfig = configuration.getName().toLowerCase().contains("test");
+        Map<ArtifactKey, DeclaredDepsResult> declaredDepsFromProjects = new ConcurrentHashMap<>();
+        List<ArtifactKeyWithVersion> moduleKeys = new ArrayList<>();
+        collectDeclaredFromRootProject(project, isTestConfig, declaredDepsFromProjects);
+        for (ResolvedArtifactResult artifact : artifacts.getArtifacts()) {
+            var componentId = artifact.getId().getComponentIdentifier();
+            if (componentId instanceof ModuleComponentIdentifier moduleId) {
+                String groupId = moduleId.getGroup();
+                String artifactId = moduleId.getModule();
+                String version = moduleId.getVersion();
+                String type = resolveArtifactType(artifact);
+                ArtifactKey moduleKey = DependencyUtils.getKey(groupId, artifactId, version, artifact.getFile(), type);
+                moduleKeys.add(new ArtifactKeyWithVersion(moduleKey, version));
+            } else if (componentId instanceof ProjectComponentIdentifier projectId) {
+                collectDeclaredFromNonRootProject(project, artifact, projectId, declaredDepsFromProjects);
+            }
+        }
+
+        return new DeclaredDependencyInputs(declaredDepsFromProjects, moduleKeys);
+    }
+
+    public record ArtifactKeyWithVersion(
+            ArtifactKey artifactKey,
+            String version) implements Serializable {
+    }
+
+    public record DeclaredDependencyInputs(
+            Map<ArtifactKey, DeclaredDepsResult> projectDeclaredDeps,
+            List<ArtifactKeyWithVersion> externalModuleComponents) {
     }
 
     private void collectDeclaredFromModule(
@@ -204,14 +239,21 @@ public class DependencyDataCollector {
         DeclaredDepsResult result = declaredDependenciesCache.computeIfAbsent(new DeclaredDepsCacheKey(moduleKey, false),
                 key -> {
                     try {
+                        var startTime = System.currentTimeMillis();
                         var modelSource = mavenModelResolver.resolveModel(moduleKey.getGroupId(), moduleKey.getArtifactId(),
                                 version);
+                        System.out
+                                .println("[LEGACY] resolve for %s took %s".formatted(moduleKey,
+                                        System.currentTimeMillis() - startTime));
                         var request = new DefaultModelBuildingRequest();
                         request.setModelSource(modelSource);
                         request.setModelResolver(mavenModelResolver);
                         request.getSystemProperties().putAll(System.getProperties());
                         request.setValidationLevel(ModelBuildingRequest.VALIDATION_LEVEL_MINIMAL);
                         Model effectiveModel = modelBuilder.build(request).getEffectiveModel();
+                        System.out.println(
+                                "[LEGACY] model build for %s took %s".formatted(moduleKey,
+                                        System.currentTimeMillis() - startTime));
                         List<DeclaredDependency> declaredDeps = toDeclaredDependencies(effectiveModel);
                         return DeclaredDepsResult.resolved(declaredDeps);
                     } catch (UnresolvableModelException | ModelBuildingException e) {
@@ -363,7 +405,7 @@ public class DependencyDataCollector {
         private final String scope;
         private final boolean optional;
 
-        DeclaredDependency(org.apache.maven.model.Dependency dep) {
+        public DeclaredDependency(org.apache.maven.model.Dependency dep) {
             this.groupId = dep.getGroupId();
             this.artifactId = dep.getArtifactId();
             this.classifier = defaultIfNull(dep.getClassifier(), ArtifactCoords.DEFAULT_CLASSIFIER);
@@ -373,7 +415,7 @@ public class DependencyDataCollector {
             this.optional = Boolean.parseBoolean(dep.getOptional());
         }
 
-        DeclaredDependency(String groupId, String artifactId, String version,
+        public DeclaredDependency(String groupId, String artifactId, String version,
                 String classifier, String type, String scope, boolean optional) {
             this.groupId = groupId;
             this.artifactId = artifactId;
@@ -384,31 +426,31 @@ public class DependencyDataCollector {
             this.optional = optional;
         }
 
-        String getGroupId() {
+        public String getGroupId() {
             return groupId;
         }
 
-        String getArtifactId() {
+        public String getArtifactId() {
             return artifactId;
         }
 
-        String getClassifier() {
+        public String getClassifier() {
             return classifier;
         }
 
-        String getType() {
+        public String getType() {
             return type;
         }
 
-        String getVersion() {
+        public String getVersion() {
             return version;
         }
 
-        String getScope() {
+        public String getScope() {
             return scope;
         }
 
-        boolean isOptional() {
+        public boolean isOptional() {
             return optional;
         }
     }

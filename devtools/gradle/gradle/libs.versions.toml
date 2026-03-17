@@ -6,6 +6,8 @@ smallrye-config = "3.16.0"
 
 junit = "6.0.3"
 assertj = "3.27.7"
+maven-resolver = "1.9.25"
+maven-wagon = "3.5.3"
 
 [plugins]
 plugin-publish = { id = "com.gradle.plugin-publish", version.ref = "plugin-publish" }
@@ -27,3 +29,7 @@ jackson-dataformat-yaml = { module = "com.fasterxml.jackson.dataformat:jackson-d
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
 junit-api = { module = "org.junit.jupiter:junit-jupiter-api" }
 assertj = { module = "org.assertj:assertj-core", version.ref = "assertj" }
+maven-resolver-connector-basic = { module = "org.apache.maven.resolver:maven-resolver-connector-basic", version.ref = "maven-resolver" }
+maven-resolver-transport-wagon = { module = "org.apache.maven.resolver:maven-resolver-transport-wagon", version.ref = "maven-resolver" }
+wagon-http = { module = "org.apache.maven.wagon:wagon-http", version.ref = "maven-wagon" }
+wagon-file = { module = "org.apache.maven.wagon:wagon-file", version.ref = "maven-wagon" }

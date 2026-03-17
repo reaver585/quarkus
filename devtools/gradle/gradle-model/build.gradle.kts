@@ -5,6 +5,10 @@ plugins {
 dependencies {
     compileOnly(libs.kotlin.gradle.plugin.api)
     implementation("org.apache.maven:maven-core")
+    implementation(libs.maven.resolver.connector.basic)
+    implementation(libs.maven.resolver.transport.wagon)
+    implementation(libs.wagon.http)
+    implementation(libs.wagon.file)
     gradleApi()
 }
 

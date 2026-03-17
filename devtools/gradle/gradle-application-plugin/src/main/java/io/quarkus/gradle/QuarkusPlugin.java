@@ -26,6 +26,7 @@ import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.ConfigurationContainer;
 import org.gradle.api.artifacts.ExternalModuleDependency;
 import org.gradle.api.artifacts.ProjectDependency;
+import org.gradle.api.artifacts.repositories.MavenArtifactRepository;
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.java.archives.Attributes;
 import org.gradle.api.plugins.BasePlugin;
@@ -57,6 +58,7 @@ import io.quarkus.gradle.tasks.QuarkusBuild;
 import io.quarkus.gradle.tasks.QuarkusBuildCacheableAppParts;
 import io.quarkus.gradle.tasks.QuarkusBuildDependencies;
 import io.quarkus.gradle.tasks.QuarkusBuildTask;
+import io.quarkus.gradle.tasks.QuarkusCollectDeclaredDependenciesTask;
 import io.quarkus.gradle.tasks.QuarkusDev;
 import io.quarkus.gradle.tasks.QuarkusGenerateCode;
 import io.quarkus.gradle.tasks.QuarkusGoOffline;
@@ -75,6 +77,7 @@ import io.quarkus.gradle.tasks.QuarkusUpdate;
 import io.quarkus.gradle.tasks.services.ForcedPropertieBuildService;
 import io.quarkus.gradle.tooling.DefaultProjectDescriptor;
 import io.quarkus.gradle.tooling.GradleApplicationModelBuilder;
+import io.quarkus.gradle.tooling.MavenRepoDescriptor;
 import io.quarkus.gradle.tooling.ProjectDescriptorBuilder;
 import io.quarkus.gradle.tooling.ToolingUtils;
 import io.quarkus.gradle.tooling.dependency.DependencyDataCollector;
@@ -205,23 +208,42 @@ public class QuarkusPlugin implements Plugin<Project> {
         Provider<DefaultProjectDescriptor> projectDescriptor = ProjectDescriptorBuilder.buildForApp(project);
         DependencyDataCollector depDataCollector = new DependencyDataCollector(project);
 
+        TaskProvider<QuarkusCollectDeclaredDependenciesTask> quarkusCollectTestDeclaredDepsTask = tasks.register(
+                "quarkusCollectTestDeclaredDependencies",
+                QuarkusCollectDeclaredDependenciesTask.class,
+                task -> configureDeclaredDepsCollectorTask(
+                        project, task, depDataCollector, testClasspath));
+        TaskProvider<QuarkusCollectDeclaredDependenciesTask> quarkusCollectDevDeclaredDepsTask = tasks.register(
+                "quarkusCollectDevDeclaredDependencies",
+                QuarkusCollectDeclaredDependenciesTask.class,
+                task -> configureDeclaredDepsCollectorTask(
+                        project, task, depDataCollector, devClasspath));
+        TaskProvider<QuarkusCollectDeclaredDependenciesTask> quarkusCollectAppDeclaredDepsTask = tasks.register(
+                "quarkusCollectAppDeclaredDependencies",
+                QuarkusCollectDeclaredDependenciesTask.class,
+                task -> configureDeclaredDepsCollectorTask(
+                        project, task, depDataCollector, normalClasspath));
+
         TaskProvider<QuarkusApplicationModelTask> quarkusGenerateTestAppModelTask = tasks.register(
                 "quarkusGenerateTestAppModel",
                 QuarkusApplicationModelTask.class, task -> {
+                    task.dependsOn(quarkusCollectTestDeclaredDepsTask);
                     configureApplicationModelTask(project, task, projectDescriptor,
-                            testClasspath, depDataCollector, LaunchMode.TEST,
+                            testClasspath, depDataCollector, quarkusCollectTestDeclaredDepsTask, LaunchMode.TEST,
                             "quarkus/application-model/quarkus-app-test-model.dat");
                 });
         TaskProvider<QuarkusApplicationModelTask> quarkusGenerateDevAppModelTask = tasks.register("quarkusGenerateDevAppModel",
                 QuarkusApplicationModelTask.class, task -> {
+                    task.dependsOn(quarkusCollectDevDeclaredDepsTask);
                     configureApplicationModelTask(project, task, projectDescriptor,
-                            devClasspath, depDataCollector, LaunchMode.DEVELOPMENT,
+                            devClasspath, depDataCollector, quarkusCollectDevDeclaredDepsTask, LaunchMode.DEVELOPMENT,
                             "quarkus/application-model/quarkus-app-dev-model.dat");
                 });
         TaskProvider<QuarkusApplicationModelTask> quarkusGenerateAppModelTask = tasks.register("quarkusGenerateAppModel",
                 QuarkusApplicationModelTask.class, task -> {
+                    task.dependsOn(quarkusCollectAppDeclaredDepsTask);
                     configureApplicationModelTask(project, task, projectDescriptor,
-                            normalClasspath, depDataCollector, LaunchMode.NORMAL,
+                            normalClasspath, depDataCollector, quarkusCollectAppDeclaredDepsTask, LaunchMode.NORMAL,
                             "quarkus/application-model/quarkus-app-model.dat");
                 });
 
@@ -253,8 +275,10 @@ public class QuarkusPlugin implements Plugin<Project> {
         TaskProvider<QuarkusApplicationModelTask> quarkusBuildAppModelTask = tasks.register("quarkusBuildAppModel",
                 QuarkusApplicationModelTask.class, task -> {
                     task.dependsOn(tasks.named(JavaPlugin.CLASSES_TASK_NAME));
+                    task.dependsOn(quarkusCollectAppDeclaredDepsTask);
                     configureApplicationModelTask(project, task, projectDescriptor,
-                            normalClasspath, depDataCollector, LaunchMode.NORMAL,
+                            normalClasspath, depDataCollector, quarkusCollectAppDeclaredDepsTask,
+                            LaunchMode.NORMAL,
                             "quarkus/application-model/quarkus-app-model-build.dat");
                 });
         tasks.register(QUARKUS_SHOW_EFFECTIVE_CONFIG_TASK_NAME,
@@ -587,15 +611,19 @@ public class QuarkusPlugin implements Plugin<Project> {
             Provider<DefaultProjectDescriptor> projectDescriptor,
             ApplicationDeploymentClasspathBuilder classpath,
             DependencyDataCollector dependencyDataCollector,
+            TaskProvider<QuarkusCollectDeclaredDependenciesTask> declaredDependenciesCollectorTask,
             LaunchMode launchMode, String quarkusModelFile) {
-        var declaredDepsProvider = project.getProviders()
+        var legacyDeclaredDepsProvider = project.getProviders()
                 .provider(() -> dependencyDataCollector.collectDeclaredDependencies(
                         project, classpath.getDeploymentConfiguration()));
         task.getProjectDescriptor().set(projectDescriptor);
         task.getDeclaredDependencyCollectorEnabled().set(declaredDependencyCollectorEnabled(project));
         task.getLaunchMode().set(launchMode);
-        task.getDeclaredDependencies().set(declaredDepsProvider);
-        task.getDeclaredDependenciesSnapshot().set(declaredDepsProvider.map(DependencyDataCollector::toSnapshot));
+        task.getDeclaredDependencies().set(legacyDeclaredDepsProvider);
+        task.getDeclaredDependenciesSnapshot().set(legacyDeclaredDepsProvider.map(DependencyDataCollector::toSnapshot));
+        task.getCollectedDeclaredDependenciesFile()
+                .set(declaredDependenciesCollectorTask
+                        .flatMap(QuarkusCollectDeclaredDependenciesTask::getCollectedDeclaredDependenciesFile));
         task.getTypeModel().set(task.getPath());
         task.getOriginalClasspath().setFrom(classpath.getOriginalRuntimeClasspathAsInput());
         task.getAppClasspath().configureFrom(classpath.getRuntimeConfigurationWithoutResolvingDeployment());
@@ -605,6 +633,33 @@ public class QuarkusPlugin implements Plugin<Project> {
         task.getCompileOnlyClasspath().configureFrom(classpath.getCompileOnlyWithoutResolvingDeployment());
         task.getDeploymentResolvedWorkaround().from(classpath.getDeploymentConfiguration().getIncoming().getFiles());
         task.getApplicationModel().set(project.getLayout().getBuildDirectory().file(quarkusModelFile));
+    }
+
+    private static void configureDeclaredDepsCollectorTask(Project project,
+            QuarkusCollectDeclaredDependenciesTask task,
+            DependencyDataCollector dependencyDataCollector,
+            ApplicationDeploymentClasspathBuilder classpath) {
+        var repositoryDescriptorsProvider = project.getProviders().provider(() -> project.getRepositories()
+                .withType(MavenArtifactRepository.class)
+                .stream()
+                .map(repo -> new MavenRepoDescriptor(repo.getName(), repo.getUrl().toString()))
+                .toList());
+        task.getRepositoryDescriptors().set(repositoryDescriptorsProvider);
+        task.getLocalRepositoryPath().set(resolveLocalRepositoryPath());
+        var declaredDepsProvider = project.getProviders()
+                .provider(() -> dependencyDataCollector.collectDeclaredDependencyInputs(
+                        project, classpath.getDeploymentConfiguration()));
+        var precomputedProjectDepsProvider = declaredDepsProvider
+                .map(DependencyDataCollector.DeclaredDependencyInputs::projectDeclaredDeps);
+        var moduleComponentIdsProvider = declaredDepsProvider
+                .map(DependencyDataCollector.DeclaredDependencyInputs::externalModuleComponents);
+        task.getExternalModuleComponents().set(moduleComponentIdsProvider);
+        task.getPrecomputedGradleProjectDeps()
+                .set(precomputedProjectDepsProvider);
+        task.getPrecomputedGradleProjectDepsSnapshot()
+                .set(precomputedProjectDepsProvider.map(DependencyDataCollector::toSnapshot));
+        task.getCollectedDeclaredDependenciesFile().set(project.getLayout().getBuildDirectory()
+                .file("quarkus/declared-dependencies/" + task.getName() + ".ser"));
     }
 
     private static void configureQuarkusBuildTask(Project project, QuarkusBuildTask task,
@@ -636,6 +691,17 @@ public class QuarkusPlugin implements Plugin<Project> {
         task.getManifestAttributes().set(quarkusExt.manifest().getAttributes());
         task.getManifestSections().set(quarkusExt.manifest().getSections());
 
+    }
+
+    private static String resolveLocalRepositoryPath() {
+        String localRepoPath = System.getProperty("maven.repo.local");
+        if (localRepoPath == null || localRepoPath.isBlank()) {
+            localRepoPath = System.getenv("MAVEN_REPO_LOCAL");
+        }
+        if (localRepoPath == null || localRepoPath.isBlank()) {
+            localRepoPath = System.getProperty("user.home") + "/.m2/repository";
+        }
+        return localRepoPath;
     }
 
     private static void configureGenerateCodeTask(QuarkusGenerateCode task,

@@ -26,6 +26,8 @@ import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.ConfigurationContainer;
 import org.gradle.api.artifacts.ExternalModuleDependency;
 import org.gradle.api.artifacts.ProjectDependency;
+import org.gradle.api.artifacts.component.ProjectComponentIdentifier;
+import org.gradle.api.attributes.Attribute;
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.java.archives.Attributes;
 import org.gradle.api.plugins.BasePlugin;
@@ -134,6 +136,10 @@ public class QuarkusPlugin implements Plugin<Project> {
     public static final String INTEGRATION_TEST_RUNTIME_ONLY_CONFIGURATION_NAME = "integrationTestRuntimeOnly";
     public static final String IMAGE_CHECK_REQUIREMENTS_NAME = "quarkusImageExtensionChecks";
 
+    private static final Attribute<String> QUARKUS_METADATA_ATTRIBUTE = Attribute.of("io.quarkus.project.metadata",
+            String.class);
+    private static final String QUARKUS_METADATA_ATTRIBUTE_VALUE = "project-metadata";
+
     private final ToolingModelBuilderRegistry registry;
 
     @SuppressWarnings("CdiInjectionPointsInspection")
@@ -155,6 +161,7 @@ public class QuarkusPlugin implements Plugin<Project> {
         final QuarkusPluginExtension quarkusExt = project.getExtensions().create(EXTENSION_NAME, QuarkusPluginExtension.class,
                 project);
 
+        project.getDependencies().getAttributesSchema().attribute(QUARKUS_METADATA_ATTRIBUTE);
         createSourceSets(project);
         createConfigurations(project);
         registerTasks(project, quarkusExt);
@@ -605,6 +612,15 @@ public class QuarkusPlugin implements Plugin<Project> {
         task.getCompileOnlyClasspath().configureFrom(classpath.getCompileOnlyWithoutResolvingDeployment());
         task.getDeploymentResolvedWorkaround().from(classpath.getDeploymentConfiguration().getIncoming().getFiles());
         task.getApplicationModel().set(project.getLayout().getBuildDirectory().file(quarkusModelFile));
+        task.getProjectMetadataFiles().from(
+                classpath.getRuntimeConfigurationWithoutResolvingDeployment().getIncoming()
+                        .artifactView(view -> {
+                            view.withVariantReselection();
+                            view.componentFilter(id -> id instanceof ProjectComponentIdentifier);
+                            view.attributes(attrs -> attrs.attribute(QUARKUS_METADATA_ATTRIBUTE,
+                                    QUARKUS_METADATA_ATTRIBUTE_VALUE));
+                            view.lenient(false);
+                        }).getFiles());
     }
 
     private static void configureQuarkusBuildTask(Project project, QuarkusBuildTask task,

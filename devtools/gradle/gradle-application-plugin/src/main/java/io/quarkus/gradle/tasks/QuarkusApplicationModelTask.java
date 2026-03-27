@@ -10,6 +10,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -147,6 +148,10 @@ public abstract class QuarkusApplicationModelTask extends DefaultTask {
     @Input
     public abstract ListProperty<String> getDeclaredDependenciesSnapshot();
 
+    @InputFiles
+    @PathSensitive(PathSensitivity.RELATIVE)
+    public abstract ConfigurableFileCollection getProjectMetadataFiles();
+
     @OutputFile
     public abstract RegularFileProperty getApplicationModel();
 
@@ -156,6 +161,8 @@ public abstract class QuarkusApplicationModelTask extends DefaultTask {
 
     @TaskAction
     public void execute() throws IOException {
+        printProjectMetadata();
+
         final DefaultProjectDescriptor projectDescriptor = getProjectDescriptor().get();
 
         final ResolvedDependencyBuilder appArtifact = getProjectArtifact(projectDescriptor);
@@ -179,6 +186,17 @@ public abstract class QuarkusApplicationModelTask extends DefaultTask {
 
         DefaultApplicationModel model = modelBuilder.build();
         ToolingUtils.serializeAppModel(model, getApplicationModel().get().getAsFile().toPath());
+    }
+
+    private void printProjectMetadata() {
+        for (File file : getProjectMetadataFiles()) {
+            System.out.println("[DEBUG] Project metadata from: " + file);
+            try {
+                System.out.println(Files.readString(file.toPath(), StandardCharsets.UTF_8));
+            } catch (IOException e) {
+                System.out.println("[DEBUG] Failed to read metadata: " + e.getMessage());
+            }
+        }
     }
 
     private ResolvedDependencyBuilder getProjectArtifact(DefaultProjectDescriptor projectDescriptor) {

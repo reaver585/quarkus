@@ -9,11 +9,8 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -26,7 +23,6 @@ import java.util.Properties;
 import java.util.ServiceLoader;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.TreeSet;
 import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -41,7 +37,6 @@ import org.jboss.logmanager.Logger;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.exporter.ExplodedExporter;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
-import org.jetbrains.java.decompiler.api.Decompiler;
 import org.junit.jupiter.api.extension.AfterAllCallback;
 import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
@@ -729,13 +724,14 @@ public class AbstractQuarkusExtensionTest<S extends AbstractQuarkusExtensionTest
                         if (referenceInMemoryClasses == null) {
                             referenceInMemoryClasses = currentInMemoryClasses;
                         } else {
-                            String mismatch = compareInMemoryClassBytes(referenceInMemoryClasses, currentInMemoryClasses);
-                            if (mismatch != null) {
-                                Path mismatchDumpPath = dumpReproducibilityMismatch(referenceInMemoryClasses,
-                                        currentInMemoryClasses, run, extensionContext);
+                            var diff = BytecodeDecompilerTools.InMemoryClassDiff.of(
+                                    referenceInMemoryClasses,
+                                    currentInMemoryClasses);
+                            if (!diff.isEmpty()) {
+                                Path mismatchDumpPath = diff.dumpReproducibilityMismatch(run, extensionContext);
                                 currentRun.close();
                                 throw new AssertionError("Build reproducibility check failed on run " + run + "/"
-                                        + buildReproducibilityRuns + ": " + mismatch + ". Dumped to "
+                                        + buildReproducibilityRuns + ": " + diff + ". Dumped to "
                                         + mismatchDumpPath);
                             }
                         }
@@ -838,149 +834,6 @@ public class AbstractQuarkusExtensionTest<S extends AbstractQuarkusExtensionTest
                 continue;
             }
             destination.put(resource, memoryClassPathElement.getResource(resource).getData());
-        }
-    }
-
-    private String compareInMemoryClassBytes(Map<String, byte[]> reference, Map<String, byte[]> current) {
-        TreeSet<String> missing = new TreeSet<>(reference.keySet());
-        missing.removeAll(current.keySet());
-
-        TreeSet<String> extra = new TreeSet<>(current.keySet());
-        extra.removeAll(reference.keySet());
-
-        TreeSet<String> changed = new TreeSet<>();
-        for (String resource : reference.keySet()) {
-            byte[] currentBytes = current.get(resource);
-            if (currentBytes != null && !Arrays.equals(reference.get(resource), currentBytes)) {
-                changed.add(resource);
-            }
-        }
-
-        if (missing.isEmpty() && extra.isEmpty() && changed.isEmpty()) {
-            return null;
-        }
-
-        return "missing=" + missing.size() + " " + pretty(missing)
-                + ", extra=" + extra.size() + " " + pretty(extra)
-                + ", changed=" + changed.size() + " " + pretty(changed);
-    }
-
-    private String pretty(TreeSet<String> values) {
-        return "[" + String.join(", ", values) + "]";
-    }
-
-    private Path dumpReproducibilityMismatch(Map<String, byte[]> reference, Map<String, byte[]> current, int run,
-            ExtensionContext extensionContext) {
-        String testRunId = extensionContext.getRequiredTestClass().getName() + "/" + UUID.randomUUID();
-        Path baseDir = Path.of("target", "debug").resolve(testRunId).resolve("reproducibility-mismatch");
-        Path run1Dir = baseDir.resolve("run-1");
-        Path runNDir = baseDir.resolve("run-" + run);
-
-        TreeSet<String> missing = new TreeSet<>(reference.keySet());
-        missing.removeAll(current.keySet());
-
-        TreeSet<String> extra = new TreeSet<>(current.keySet());
-        extra.removeAll(reference.keySet());
-
-        TreeSet<String> changed = new TreeSet<>();
-        for (String resource : reference.keySet()) {
-            byte[] currentBytes = current.get(resource);
-            if (currentBytes != null && !Arrays.equals(reference.get(resource), currentBytes)) {
-                changed.add(resource);
-            }
-        }
-
-        StringBuilder index = new StringBuilder();
-        index.append("run-1 vs run-").append(run).append('\n');
-
-        try {
-            Files.createDirectories(run1Dir);
-            Files.createDirectories(runNDir);
-
-            for (String resource : missing) {
-                writeClassDump(run1Dir, resource, reference.get(resource));
-                index.append("MISSING_IN_RUN_").append(run).append(' ').append(resource)
-                        .append(" run-1-sha256=").append(sha256(reference.get(resource))).append('\n');
-            }
-            for (String resource : extra) {
-                writeClassDump(runNDir, resource, current.get(resource));
-                index.append("EXTRA_IN_RUN_").append(run).append(' ').append(resource)
-                        .append(" run-").append(run).append("-sha256=").append(sha256(current.get(resource)))
-                        .append('\n');
-            }
-            for (String resource : changed) {
-                writeClassDump(run1Dir, resource, reference.get(resource));
-                writeClassDump(runNDir, resource, current.get(resource));
-                index.append("CHANGED ").append(resource)
-                        .append(" run-1-sha256=").append(sha256(reference.get(resource)))
-                        .append(" run-").append(run).append("-sha256=").append(sha256(current.get(resource)))
-                        .append('\n');
-            }
-
-            decompileClassDump(run1Dir, baseDir.resolve("run-1-decompiled"), index);
-            decompileClassDump(runNDir, baseDir.resolve("run-" + run + "-decompiled"), index);
-
-            Files.write(baseDir.resolve("mismatch.txt"), index.toString().getBytes(StandardCharsets.UTF_8));
-            return baseDir;
-        } catch (Exception e) {
-            throw new IllegalStateException("Unable to dump reproducibility mismatch classes to " + baseDir, e);
-        }
-    }
-
-    private void writeClassDump(Path runDir, String resource, byte[] data) throws Exception {
-        Path outputFile = runDir.resolve(resource);
-        Files.createDirectories(outputFile.getParent());
-        Files.write(outputFile, data);
-    }
-
-    private void decompileClassDump(Path classInputDir, Path decompiledOutputDir, StringBuilder index) throws Exception {
-        if (!Files.exists(classInputDir)) {
-            return;
-        }
-        Files.createDirectories(decompiledOutputDir);
-
-        Process process = new ProcessBuilder(
-                "java",
-                "-cp",
-                System.getProperty("java.class.path"),
-                "org.jetbrains.java.decompiler.main.decompiler.ConsoleDecompiler",
-                "-rsy=0",
-                "-rbr=0",
-                classInputDir.toAbsolutePath().toString(),
-                decompiledOutputDir.toAbsolutePath().toString())
-                .redirectErrorStream(true)
-                .start();
-
-        String decompilerOutput = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-        int exitCode;
-        try {
-            exitCode = process.waitFor();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("Interrupted while decompiling classes in " + classInputDir, e);
-        }
-
-        Files.write(decompiledOutputDir.resolve("decompile.log"), decompilerOutput.getBytes(StandardCharsets.UTF_8));
-        if (exitCode == 0) {
-            index.append("DECOMPILED ").append(classInputDir).append(" -> ").append(decompiledOutputDir).append('\n');
-        } else {
-            index.append("DECOMPILE_FAILED ").append(classInputDir).append(" -> ").append(decompiledOutputDir)
-                    .append(" (exit=").append(exitCode).append(")\n");
-        }
-    }
-
-    private String sha256(byte[] data) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(data);
-            StringBuilder builder = new StringBuilder(hash.length * 2);
-            for (byte b : hash) {
-                builder.append(Character.forDigit((b >> 4) & 0xF, 16));
-                builder.append(Character.forDigit(b & 0xF, 16));
-            }
-            return builder.toString();
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 not available", e);
         }
     }
 

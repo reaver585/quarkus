@@ -56,6 +56,7 @@ import io.quarkus.bootstrap.app.QuarkusBootstrap;
 import io.quarkus.bootstrap.app.RunningQuarkusApplication;
 import io.quarkus.bootstrap.classloading.ClassLoaderEventListener;
 import io.quarkus.bootstrap.classloading.ClassPathElement;
+import io.quarkus.bootstrap.classloading.MemoryClassPathElement;
 import io.quarkus.bootstrap.classloading.QuarkusClassLoader;
 import io.quarkus.builder.BuildChainBuilder;
 import io.quarkus.builder.BuildContext;
@@ -140,6 +141,7 @@ public class AbstractQuarkusExtensionTest<S extends AbstractQuarkusExtensionTest
 
     private boolean debugBytecode = false;
     private List<String> traceCategories = new ArrayList<>();
+    private int buildReproducibilityRuns = 10;
 
     private Map<String, String> systemPropertiesToRestore = new HashMap<>();
     private Map<String, java.util.logging.Level> loggerLevelsToRestore = new HashMap<>();
@@ -286,6 +288,14 @@ public class AbstractQuarkusExtensionTest<S extends AbstractQuarkusExtensionTest
      */
     public S setFlatClassPath(boolean flatClassPath) {
         this.flatClassPath = flatClassPath;
+        return (S) this;
+    }
+
+    public S checkBuildReproducibility(int runs) {
+        if (runs < 2) {
+            throw new IllegalArgumentException("Build reproducibility checks require at least 2 runs");
+        }
+        this.buildReproducibilityRuns = runs;
         return (S) this;
     }
 
@@ -552,6 +562,8 @@ public class AbstractQuarkusExtensionTest<S extends AbstractQuarkusExtensionTest
         if (beforeAllCustomizer != null) {
             beforeAllCustomizer.run();
         }
+        // pin the output timestamp so that build time values are stable across runs
+        overrideConfigKey("quarkus.package.output-timestamp", "1970-01-02T00:00:00Z");
         if (debugBytecode) {
             // Use a unique ID to avoid overriding dumps between test classes (and re-execution of flaky tests).
             var testRunId = extensionContext.getRequiredTestClass().getName() + "/" + UUID.randomUUID();
@@ -697,14 +709,43 @@ public class AbstractQuarkusExtensionTest<S extends AbstractQuarkusExtensionTest
                 }
                 curatedApplication = builder.build().bootstrap();
 
-                StartupActionImpl startupAction = new AugmentActionImpl(curatedApplication, customizers, classLoadListeners)
-                        .createInitialRuntimeApplication();
                 Map<String, String> overriddenConfig = new HashMap<>(testResourceManager.getConfigProperties());
                 if (customRuntimeApplicationProperties != null) {
                     overriddenConfig.putAll(customRuntimeApplicationProperties);
                 }
-                startupAction.overrideConfig(overriddenConfig);
-                runningQuarkusApplication = startupAction.run(commandLineParameters);
+                StartupActionImpl startupAction = null;
+                RunningQuarkusApplication currentRun = null;
+                Map<String, byte[]> referenceInMemoryClasses = null;
+                for (int run = 1; run <= buildReproducibilityRuns; run++) {
+                    startupAction = new AugmentActionImpl(curatedApplication, customizers, classLoadListeners)
+                            .createInitialRuntimeApplication();
+                    startupAction.overrideConfig(overriddenConfig);
+                    currentRun = startupAction.run(commandLineParameters);
+                    if (buildReproducibilityRuns > 1) { // compare only when running more than once
+                        Map<String, byte[]> currentInMemoryClasses = collectInMemoryClassBytes(currentRun.getClassLoader());
+                        if (referenceInMemoryClasses == null) {
+                            referenceInMemoryClasses = currentInMemoryClasses;
+                        } else {
+                            var diff = BytecodeTools.diff(
+                                    referenceInMemoryClasses,
+                                    currentInMemoryClasses);
+                            if (!diff.isEmpty()) {
+                                Path mismatchDumpPath = BytecodeTools.dumpReproducibilityMismatch(diff,
+                                        referenceInMemoryClasses, currentInMemoryClasses, run, extensionContext);
+                                currentRun.close();
+                                inMemoryLogHandler.clearRecords();
+                                throw new AssertionError("Build reproducibility check failed on run " + run + "/"
+                                        + buildReproducibilityRuns + ": " + diff + ". Dumped to "
+                                        + mismatchDumpPath);
+                            }
+                        }
+                    }
+                    if (run < buildReproducibilityRuns) {
+                        currentRun.close();
+                        inMemoryLogHandler.clearRecords();
+                    }
+                }
+                runningQuarkusApplication = currentRun;
                 //we restore the CL at the end of the test
                 Thread.currentThread().setContextClassLoader(runningQuarkusApplication.getClassLoader());
                 if (assertException != null) {
@@ -767,6 +808,62 @@ public class AbstractQuarkusExtensionTest<S extends AbstractQuarkusExtensionTest
             //failed to unwrap
         }
         return cause;
+    }
+
+    private Map<String, byte[]> collectInMemoryClassBytes(ClassLoader classLoader) {
+        if (!(classLoader instanceof QuarkusClassLoader quarkusClassLoader)) {
+            throw new IllegalStateException("Unexpected classloader: " + classLoader);
+        }
+        Map<String, byte[]> classes = new HashMap<>();
+        addMemoryClassBytes(classes, getPrivateField(quarkusClassLoader, "transformedClasses", MemoryClassPathElement.class));
+        addMemoryClassBytes(classes, getPrivateField(quarkusClassLoader, "resettableElement", MemoryClassPathElement.class));
+        for (ClassPathElement element : getClassPathElements(quarkusClassLoader, "normalPriorityElements")) {
+            if (element instanceof MemoryClassPathElement memoryClassPathElement) {
+                addMemoryClassBytes(classes, memoryClassPathElement);
+            }
+        }
+        for (ClassPathElement element : getClassPathElements(quarkusClassLoader, "lesserPriorityElements")) {
+            if (element instanceof MemoryClassPathElement memoryClassPathElement) {
+                addMemoryClassBytes(classes, memoryClassPathElement);
+            }
+        }
+        return classes;
+    }
+
+    private void addMemoryClassBytes(Map<String, byte[]> destination, MemoryClassPathElement memoryClassPathElement) {
+        if (memoryClassPathElement == null) {
+            return;
+        }
+        for (String resource : memoryClassPathElement.getProvidedResources()) {
+            if (!resource.endsWith(".class")) {
+                continue;
+            }
+            destination.putIfAbsent(resource, memoryClassPathElement.getResource(resource).getData());
+        }
+    }
+
+    private List<ClassPathElement> getClassPathElements(QuarkusClassLoader classLoader, String fieldName) {
+        List<?> values = getPrivateField(classLoader, fieldName, List.class);
+        List<ClassPathElement> elements = new ArrayList<>(values.size());
+        for (Object value : values) {
+            elements.add(ClassPathElement.class.cast(value));
+        }
+        return elements;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> T getPrivateField(Object target, String fieldName, Class<T> type) {
+        try {
+            Field field = target.getClass().getDeclaredField(fieldName);
+            field.setAccessible(true);
+            Object value = field.get(target);
+            if (value == null) {
+                return null;
+            }
+            return type.cast(value);
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            throw new IllegalStateException("Unable to access field '" + fieldName + "' on " + target.getClass(), e);
+        }
     }
 
     private void overrideSystemProperty(String key, String value) {

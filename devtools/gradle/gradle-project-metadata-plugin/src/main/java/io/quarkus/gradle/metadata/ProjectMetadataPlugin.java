@@ -34,7 +34,6 @@ public class ProjectMetadataPlugin implements Plugin<Settings> {
         }
 
         project.getDependencies().getAttributesSchema().attribute(QUARKUS_METADATA_ATTRIBUTE);
-        ProjectMetadata metadata = collectMetadata(project);
 
         var generateTask = project.getTasks().register(
                 GENERATE_TASK_NAME,

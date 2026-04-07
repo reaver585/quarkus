@@ -41,6 +41,7 @@ import org.jboss.logmanager.Logger;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.exporter.ExplodedExporter;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
+import org.jetbrains.java.decompiler.api.Decompiler;
 import org.junit.jupiter.api.extension.AfterAllCallback;
 import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
@@ -916,6 +917,9 @@ public class AbstractQuarkusExtensionTest<S extends AbstractQuarkusExtensionTest
                         .append('\n');
             }
 
+            decompileClassDump(run1Dir, baseDir.resolve("run-1-decompiled"), index);
+            decompileClassDump(runNDir, baseDir.resolve("run-" + run + "-decompiled"), index);
+
             Files.write(baseDir.resolve("mismatch.txt"), index.toString().getBytes(StandardCharsets.UTF_8));
             return baseDir;
         } catch (Exception e) {
@@ -927,6 +931,42 @@ public class AbstractQuarkusExtensionTest<S extends AbstractQuarkusExtensionTest
         Path outputFile = runDir.resolve(resource);
         Files.createDirectories(outputFile.getParent());
         Files.write(outputFile, data);
+    }
+
+    private void decompileClassDump(Path classInputDir, Path decompiledOutputDir, StringBuilder index) throws Exception {
+        if (!Files.exists(classInputDir)) {
+            return;
+        }
+        Files.createDirectories(decompiledOutputDir);
+
+        Process process = new ProcessBuilder(
+                "java",
+                "-cp",
+                System.getProperty("java.class.path"),
+                "org.jetbrains.java.decompiler.main.decompiler.ConsoleDecompiler",
+                "-rsy=0",
+                "-rbr=0",
+                classInputDir.toAbsolutePath().toString(),
+                decompiledOutputDir.toAbsolutePath().toString())
+                .redirectErrorStream(true)
+                .start();
+
+        String decompilerOutput = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        int exitCode;
+        try {
+            exitCode = process.waitFor();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while decompiling classes in " + classInputDir, e);
+        }
+
+        Files.write(decompiledOutputDir.resolve("decompile.log"), decompilerOutput.getBytes(StandardCharsets.UTF_8));
+        if (exitCode == 0) {
+            index.append("DECOMPILED ").append(classInputDir).append(" -> ").append(decompiledOutputDir).append('\n');
+        } else {
+            index.append("DECOMPILE_FAILED ").append(classInputDir).append(" -> ").append(decompiledOutputDir)
+                    .append(" (exit=").append(exitCode).append(")\n");
+        }
     }
 
     private String sha256(byte[] data) {

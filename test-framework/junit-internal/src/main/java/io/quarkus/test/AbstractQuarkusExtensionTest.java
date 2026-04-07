@@ -724,11 +724,12 @@ public class AbstractQuarkusExtensionTest<S extends AbstractQuarkusExtensionTest
                         if (referenceInMemoryClasses == null) {
                             referenceInMemoryClasses = currentInMemoryClasses;
                         } else {
-                            var diff = BytecodeDecompilerTools.InMemoryClassDiff.of(
+                            var diff = BytecodeTools.diff(
                                     referenceInMemoryClasses,
                                     currentInMemoryClasses);
                             if (!diff.isEmpty()) {
-                                Path mismatchDumpPath = diff.dumpReproducibilityMismatch(run, extensionContext);
+                                Path mismatchDumpPath = BytecodeTools.dumpReproducibilityMismatch(diff,
+                                        referenceInMemoryClasses, currentInMemoryClasses, run, extensionContext);
                                 currentRun.close();
                                 throw new AssertionError("Build reproducibility check failed on run " + run + "/"
                                         + buildReproducibilityRuns + ": " + diff + ". Dumped to "
@@ -833,7 +834,7 @@ public class AbstractQuarkusExtensionTest<S extends AbstractQuarkusExtensionTest
             if (!resource.endsWith(".class")) {
                 continue;
             }
-            destination.put(resource, memoryClassPathElement.getResource(resource).getData());
+            destination.putIfAbsent(resource, memoryClassPathElement.getResource(resource).getData());
         }
     }
 

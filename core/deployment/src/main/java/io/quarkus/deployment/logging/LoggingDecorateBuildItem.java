@@ -3,6 +3,7 @@ package io.quarkus.deployment.logging;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
 import org.jboss.jandex.ClassInfo;
@@ -39,6 +40,7 @@ public final class LoggingDecorateBuildItem extends SimpleBuildItem {
         for (ClassInfo ci : knownClasses) {
             knowClasses.add(ci.name().toString());
         }
+        Collections.sort(knowClasses);
         return knowClasses;
     }
 

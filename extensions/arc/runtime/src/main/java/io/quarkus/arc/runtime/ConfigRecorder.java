@@ -75,10 +75,11 @@ public class ConfigRecorder {
         }
     }
 
-    public void registerConfigProperties(final Set<ConfigClass> configClasses) {
+    public void registerConfigProperties(final List<ConfigClass> configClasses) {
         try {
             SmallRyeConfig config = (SmallRyeConfig) ConfigProvider.getConfig();
-            ConfigMappings.registerConfigProperties(config, configClasses);
+            Set<ConfigClass> configClassSet = new HashSet<>(configClasses);
+            ConfigMappings.registerConfigProperties(config, configClassSet);
         } catch (ConfigValidationException e) {
             throw new DeploymentException(e.getMessage(), e);
         }

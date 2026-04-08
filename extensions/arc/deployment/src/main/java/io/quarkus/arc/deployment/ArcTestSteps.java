@@ -1,6 +1,8 @@
 package io.quarkus.arc.deployment;
 
+import java.util.Comparator;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.function.Predicate;
 
@@ -60,7 +62,11 @@ public class ArcTestSteps {
             BeanDiscoveryFinishedBuildItem beanDiscoveryFinished,
             CompletedApplicationClassPredicateBuildItem predicate) {
         Set<String> applicationBeanClasses = new HashSet<>();
-        for (BeanInfo bean : beanDiscoveryFinished.beanStream().classBeans()) {
+        List<BeanInfo> beanInfos = beanDiscoveryFinished.beanStream().classBeans()
+                .stream()
+                .sorted(Comparator.comparing(bi -> bi.getBeanClass().toString()))
+                .toList();
+        for (BeanInfo bean : beanInfos) {
             if (predicate.test(bean.getBeanClass())) {
                 applicationBeanClasses.add(bean.getBeanClass().toString());
             }

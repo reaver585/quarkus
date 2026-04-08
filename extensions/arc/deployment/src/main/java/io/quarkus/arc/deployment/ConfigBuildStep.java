@@ -21,6 +21,7 @@ import static org.jboss.jandex.AnnotationValue.createStringValue;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -483,8 +484,11 @@ public class ConfigBuildStep {
 
         recorder.registerConfigProperties(
                 configProperties.stream()
+                        .sorted(Comparator.comparing((ConfigPropertiesBuildItem p) -> p.getConfigClass().getName())
+                                .thenComparing(ConfigPropertiesBuildItem::getPrefix))
                         .map(p -> configClass(p.getConfigClass(), p.getPrefix()))
-                        .collect(toSet()));
+                        .distinct()
+                        .toList());
 
         // Ensure that @ConfigProperties are registered before Startup events
         serviceStart.produce(new ServiceStartBuildItem("microprofile-config-properties"));

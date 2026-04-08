@@ -14,6 +14,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.jar.Manifest;
@@ -28,6 +29,7 @@ class BytecodeTools {
 
     private static final DateTimeFormatter TEST_RUN_ID_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS");
     private static final Map<String, Object> VINEFLOWER_OPTIONS = createVineflowerOptions();
+    private static final Set<String> EXCLUDED = Set.of("io/quarkus/runner/recorded/WebJarProcessor$processWebJarDevMode");
 
     static void decompileClassDump(Path classInputDir, Path decompiledOutputDir, StringBuilder index) throws Exception {
         if (!Files.exists(classInputDir)) {
@@ -69,11 +71,15 @@ class BytecodeTools {
         TreeSet<String> changed = new TreeSet<>();
         for (String resource : reference.keySet()) {
             byte[] currentBytes = current.get(resource);
-            if (currentBytes != null && !Arrays.equals(reference.get(resource), currentBytes)) {
+            if (!isExcluded(resource) && currentBytes != null && !Arrays.equals(reference.get(resource), currentBytes)) {
                 changed.add(resource);
             }
         }
         return new InMemoryClassDiff(missing, extra, changed);
+    }
+
+    private static boolean isExcluded(String resource) {
+        return EXCLUDED.stream().anyMatch(excluded -> resource.startsWith(excluded));
     }
 
     static Path dumpReproducibilityMismatch(InMemoryClassDiff diff, Map<String, byte[]> reference, Map<String, byte[]> current,

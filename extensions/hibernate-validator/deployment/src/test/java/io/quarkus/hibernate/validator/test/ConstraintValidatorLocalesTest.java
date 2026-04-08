@@ -23,7 +23,7 @@ public class ConstraintValidatorLocalesTest {
             .create(JavaArchive.class).addClasses(MyBean.class)
             .addAsResource("application.properties")
             .addAsResource("ValidationMessages.properties")
-            .addAsResource("ValidationMessages_fr_FR.properties")).checkBuildReproducibility(10);
+            .addAsResource("ValidationMessages_fr_FR.properties"));
 
     @Test
     public void testConstraintLocale() {

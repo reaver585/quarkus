@@ -6,7 +6,8 @@ import io.quarkus.builder.item.MultiBuildItem;
 /**
  * Used to record that a specific JPA entity is associated with a specific persistence unit
  */
-public final class EntityToPersistenceUnitBuildItem extends MultiBuildItem {
+public final class EntityToPersistenceUnitBuildItem extends MultiBuildItem
+        implements Comparable<EntityToPersistenceUnitBuildItem> {
 
     private final String entityClass;
     private final String persistenceUnitName;
@@ -29,5 +30,10 @@ public final class EntityToPersistenceUnitBuildItem extends MultiBuildItem {
 
     public String getReactivePersistenceUnitName() {
         return reactivePersistenceUnitName;
+    }
+
+    @Override
+    public int compareTo(EntityToPersistenceUnitBuildItem other) {
+        return entityClass.compareTo(other.entityClass);
     }
 }

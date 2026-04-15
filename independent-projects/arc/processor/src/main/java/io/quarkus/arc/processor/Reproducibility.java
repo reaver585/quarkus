@@ -27,7 +27,7 @@ public class Reproducibility {
     public static final Comparator<BeanInfo> BEAN_COMPARATOR = Comparator.comparing(BeanInfo::getIdentifier);
     static final Comparator<ObserverInfo> OBSERVER_COMPARATOR = Comparator.comparing(ObserverInfo::getIdentifier);
     static final Comparator<Type> TYPE_COMPARATOR = Comparator.comparing(Type::name).thenComparing(Type::toString);
-    static final Comparator<ClassInfo> CLASS_COMPARATOR = Comparator.comparing(c -> c.name().toString());
+    public static final Comparator<ClassInfo> CLASS_COMPARATOR = Comparator.comparing(c -> c.name().toString());
     static final Comparator<AnnotationInstance> ANNOTATION_COMPARATOR = Comparator.comparing(AnnotationInstance::name)
             .thenComparing(it -> it.toString());
     static final Comparator<AnnotationInstanceEquivalenceProxy> ANNOTATION_PROXY_COMPARATOR = Comparator

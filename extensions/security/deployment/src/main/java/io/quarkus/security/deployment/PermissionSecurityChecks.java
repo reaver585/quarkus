@@ -20,6 +20,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -85,8 +86,8 @@ interface PermissionSecurityChecks {
         private static final String IS_GRANTED = "isGranted";
         private static final DotName SECURITY_IDENTITY_NAME = DotName.createSimple(SecurityIdentity.class);
         private static final String SECURED_METHOD_PARAMETER = "securedMethodParameter";
-        private final Map<AnnotationTarget, List<List<PermissionKey>>> targetToPermissionKeys = new HashMap<>();
-        private final Map<AnnotationTarget, LogicalAndPermissionPredicate> targetToPredicate = new HashMap<>();
+        private final Map<AnnotationTarget, List<List<PermissionKey>>> targetToPermissionKeys = new LinkedHashMap<>();
+        private final Map<AnnotationTarget, LogicalAndPermissionPredicate> targetToPredicate = new LinkedHashMap<>();
         private final Map<String, MethodInfo> classSignatureToConstructor = new HashMap<>();
         private final IndexView index;
         private final List<AnnotationInstance> permissionInstances;
@@ -1708,17 +1709,23 @@ interface PermissionSecurityChecks {
 
         private String createConverterName(MethodInfo securedMethod, int idx) {
             // postfix enumeration is required because same secured method may require multiple converters
-            var converterName = hashCodeToString(securedMethod.hashCode()) + "_" + idx;
+            var converterName = (securedMethod.declaringClass().name()
+                    + "_"
+                    + securedMethod.name()
+                    + securedMethod.parameterTypes()
+                            .stream()
+                            .map(Type::name)
+                            .map(DotName::toString)
+                            .collect(Collectors.joining("_", "_", "")))
+                    .replace('.', '_')
+                    + "_"
+                    + idx;
             if (converterNameToMethodHandle.containsKey(converterName)) {
                 return createConverterName(securedMethod, idx + 1);
             }
             return converterName;
         }
 
-    }
-
-    private static String hashCodeToString(Object object) {
-        return (object.hashCode() + "").replace('-', '_');
     }
 
     private static String toFieldGetter(String paramExpression) {

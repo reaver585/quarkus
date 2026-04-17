@@ -1000,7 +1000,7 @@ public class SecurityProcessor {
                 methodToInstanceCollector,
                 ((m, i) -> result.put(m, recorder.denyAll())), classAnnotations, hasAdditionalSecurityAnnotations);
         // here we just collect all methods annotated with @RolesAllowed
-        Map<MethodInfo, String[]> methodToRoles = new HashMap<>();
+        Map<MethodInfo, String[]> methodToRoles = new LinkedHashMap<>();
         var rolesAllowedGatherer = new SecurityAnnotationGatherer(securityTransformer.getAnnotations(ROLES_ALLOWED),
                 methodToInstanceCollector,
                 ((methodInfo, instance) -> methodToRoles.put(methodInfo, instance.value().asStringArray())), classAnnotations,
@@ -1104,8 +1104,7 @@ public class SecurityProcessor {
         Map<Set<String>, SecurityCheck> cache = new HashMap<>();
         final AtomicInteger keyIndex = new AtomicInteger(0);
         final AtomicBoolean hasRolesAllowedCheckWithConfigExp = new AtomicBoolean(false);
-        for (Map.Entry<MethodInfo, String[]> entry : methodToRoles.entrySet().stream()
-                .sorted(Map.Entry.comparingByKey(Comparator.comparing(MethodInfo::toString))).toList()) {
+        for (Map.Entry<MethodInfo, String[]> entry : methodToRoles.entrySet()) {
             final MethodInfo methodInfo = entry.getKey();
             result.put(methodInfo,
                     computeRolesAllowedCheck(cache, hasRolesAllowedCheckWithConfigExp, keyIndex, recorder, entry.getValue()));

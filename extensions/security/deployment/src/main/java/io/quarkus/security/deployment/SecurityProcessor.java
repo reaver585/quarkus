@@ -30,6 +30,8 @@ import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -920,8 +922,13 @@ public class SecurityProcessor {
         classPredicate.produce(new ApplicationClassPredicateBuildItem(new SecurityCheckStorageAppPredicate()));
 
         RuntimeValue<SecurityCheckStorageBuilder> builder = recorder.newBuilder();
-        for (Map.Entry<MethodInfo, SecurityCheck> methodEntry : securityChecksItem.securityChecks.entrySet().stream()
-                .sorted(Map.Entry.comparingByKey(Comparator.comparing(MethodInfo::toString))).toList()) {
+        List<Map.Entry<MethodInfo, SecurityCheck>> securityCheckEntries = securityChecksItem.securityChecks.entrySet()
+                .stream()
+                .sorted(Map.Entry.comparingByKey(Comparator.comparing(
+                        (MethodInfo m) -> m.declaringClass().name().toString())
+                        .thenComparing(MethodInfo::toString)))
+                .toList();
+        for (Map.Entry<MethodInfo, SecurityCheck> methodEntry : securityCheckEntries) {
             MethodInfo method = methodEntry.getKey();
             String[] params = new String[method.parametersCount()];
             for (int i = 0; i < method.parametersCount(); ++i) {
@@ -979,7 +986,7 @@ public class SecurityProcessor {
             BuildProducer<GeneratedClassBuildItem> generatedClassesProducer,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClassesProducer,
             SecurityTransformer securityTransformer) {
-        Map<MethodInfo, AnnotationInstance> methodToInstanceCollector = new HashMap<>();
+        Map<MethodInfo, AnnotationInstance> methodToInstanceCollector = new LinkedHashMap<>();
         Map<ClassInfo, AnnotationInstance> classAnnotations = new HashMap<>();
         Map<MethodInfo, SecurityCheck> result = new HashMap<>();
         var permitAllGatherer = new SecurityAnnotationGatherer(securityTransformer.getAnnotations(PERMIT_ALL),
@@ -1161,7 +1168,7 @@ public class SecurityProcessor {
          * collect the declaring classes, then go through all methods of the classes and add the necessary check
          */
         if (denyUnannotated) {
-            Set<ClassInfo> allClassesWithSecurityChecks = new HashSet<>(methodToInstanceCollector.keySet().size());
+            Set<ClassInfo> allClassesWithSecurityChecks = new LinkedHashSet<>(methodToInstanceCollector.keySet().size());
             for (MethodInfo methodInfo : methodToInstanceCollector.keySet()) {
                 allClassesWithSecurityChecks.add(methodInfo.declaringClass());
             }

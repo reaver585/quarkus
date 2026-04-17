@@ -6,7 +6,7 @@ import io.quarkus.vertx.http.deployment.HttpRootPathBuildItem;
 import io.quarkus.vertx.http.deployment.NonApplicationRootPathBuildItem;
 import io.quarkus.vertx.http.runtime.management.ManagementInterfaceBuildTimeConfig;
 
-public class ConfiguredPathInfo {
+public class ConfiguredPathInfo implements Comparable<ConfiguredPathInfo> {
     private final String name;
     private final String endpointPath;
     private final boolean absolutePath;
@@ -43,5 +43,14 @@ public class ConfiguredPathInfo {
         } else {
             return TemplateHtmlBuilder.adjustRoot(nonAppRoot.getNormalizedHttpRootPath(), endpointPath);
         }
+    }
+
+    @Override
+    public int compareTo(ConfiguredPathInfo o) {
+        int result = this.endpointPath.compareTo(o.endpointPath);
+        if (result != 0) {
+            return result;
+        }
+        return this.name.compareTo(o.name);
     }
 }

@@ -737,7 +737,6 @@ public class AbstractQuarkusExtensionTest<S extends AbstractQuarkusExtensionTest
                                         + mismatchDumpPath);
                             }
                         }
-                        checkAction.getClassLoader().close();
                         inMemoryLogHandler.clearRecords();
                     }
                 }

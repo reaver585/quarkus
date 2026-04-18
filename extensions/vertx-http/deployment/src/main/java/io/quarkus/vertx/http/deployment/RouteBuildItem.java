@@ -2,7 +2,6 @@ package io.quarkus.vertx.http.deployment;
 
 import static io.quarkus.vertx.http.deployment.RouteBuildItem.RouteType.APPLICATION_ROUTE;
 
-import java.util.Comparator;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -19,7 +18,7 @@ import io.vertx.ext.web.Route;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 
-public final class RouteBuildItem extends MultiBuildItem implements Comparable<RouteBuildItem> {
+public final class RouteBuildItem extends MultiBuildItem {
 
     public static Builder builder() {
         return new Builder();
@@ -99,18 +98,6 @@ public final class RouteBuildItem extends MultiBuildItem implements Comparable<R
      */
     public boolean isManagement() {
         return management;
-    }
-
-    private static final Comparator<RouteBuildItem> COMPARATOR = Comparator
-            .comparing((RouteBuildItem r) -> r.configuredPathInfo, Comparator.nullsLast(Comparator.naturalOrder()))
-            .thenComparing(r -> r.routeType)
-            .thenComparing(r -> r.notFoundPageDisplayableEndpoint != null
-                    ? r.notFoundPageDisplayableEndpoint.getEndpoint()
-                    : null, Comparator.nullsLast(Comparator.naturalOrder()));
-
-    @Override
-    public int compareTo(RouteBuildItem o) {
-        return COMPARATOR.compare(this, o);
     }
 
     public enum RouteType {

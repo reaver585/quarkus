@@ -32,7 +32,7 @@ class BytecodeTools {
     private static final Set<String> EXCLUDED = Set.of(
             "io/quarkus/runner/recorded/WebJarProcessor$processWebJarDevMode",
             "io/quarkus/runner/recorded/SmallRyeHealthProcessor$registerHealthUiHandler",
-            "io/quarkus/runner/recorded/SmallRyeGraphQLProcessor.registerGraphQLUiHandler",
+            "io/quarkus/runner/recorded/SmallRyeGraphQLProcessor$registerGraphQLUiHandler",
             "io/quarkus/runner/recorded/SwaggerUiProcessor$registerSwaggerUiHandler");
 
     static void decompileClassDump(Path classInputDir, Path decompiledOutputDir, StringBuilder index) throws Exception {

@@ -694,9 +694,10 @@ public class AbstractQuarkusExtensionTest<S extends AbstractQuarkusExtensionTest
                 if (buildReproducibilityRuns > 1) {
                     for (int run = 1; run < buildReproducibilityRuns; run++) {
                         CuratedApplication checkCuratedApplication = null;
+                        StartupActionImpl checkAction = null;
                         try {
                             checkCuratedApplication = createCuratedApplication(extensionContext, testLocation, projectDir);
-                            StartupActionImpl checkAction = new AugmentActionImpl(checkCuratedApplication, customizers,
+                            checkAction = new AugmentActionImpl(checkCuratedApplication, customizers,
                                     classLoadListeners)
                                     .createInitialRuntimeApplication();
                             Map<String, byte[]> currentInMemoryClasses = collectInMemoryClassBytes(
@@ -716,6 +717,9 @@ public class AbstractQuarkusExtensionTest<S extends AbstractQuarkusExtensionTest
                                 }
                             }
                         } finally {
+                            if (checkAction != null) {
+                                checkAction.getClassLoader().close();
+                            }
                             if (checkCuratedApplication != null) {
                                 checkCuratedApplication.close();
                             }

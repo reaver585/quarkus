@@ -114,14 +114,12 @@ public class InstrumentationProcessor {
     @Record(ExecutionTime.STATIC_INIT)
     VertxOptionsConsumerBuildItem vertxHttpMetricsOptions(InstrumentationRecorder recorder) {
         return new VertxOptionsConsumerBuildItem(recorder.getVertxHttpMetricsOptions(), LIBRARY_AFTER + 1);
-        //                "opentelemetry-vertx-http-metrics-options");
     }
 
     @BuildStep(onlyIfNot = { MetricsExtensionAvailable.class, VertxHttpAvailable.class })
     @Record(ExecutionTime.STATIC_INIT)
     VertxOptionsConsumerBuildItem vertxMetricsOptions(InstrumentationRecorder recorder) {
         return new VertxOptionsConsumerBuildItem(recorder.getVertxMetricsOptions(), LIBRARY_AFTER + 1);
-        //                "opentelemetry-vertx-metrics-options");
     }
 
     @BuildStep
@@ -129,7 +127,6 @@ public class InstrumentationProcessor {
     VertxOptionsConsumerBuildItem vertxTracingOptions(
             InstrumentationRecorder recorder) {
         return new VertxOptionsConsumerBuildItem(recorder.getVertxTracingOptions(), LIBRARY_AFTER);
-        //                "opentelemetry-vertx-tracing-options");
     }
 
     // RESTEasy and Vert.x web

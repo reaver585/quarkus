@@ -50,8 +50,7 @@ public class VertxBinderProcessor {
     @BuildStep
     @Record(value = ExecutionTime.STATIC_INIT)
     VertxOptionsConsumerBuildItem build(VertxMeterBinderRecorder recorder) {
-        return new VertxOptionsConsumerBuildItem(recorder.setVertxMetricsOptions(), Interceptor.Priority.LIBRARY_AFTER,
-                "micrometer-vertx-metrics-options");
+        return new VertxOptionsConsumerBuildItem(recorder.setVertxMetricsOptions(), Interceptor.Priority.LIBRARY_AFTER);
     }
 
     @BuildStep

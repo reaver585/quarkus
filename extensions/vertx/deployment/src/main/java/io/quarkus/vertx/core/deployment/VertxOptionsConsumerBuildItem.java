@@ -16,10 +16,16 @@ import io.vertx.core.VertxOptions;
 public final class VertxOptionsConsumerBuildItem extends MultiBuildItem implements Comparable<VertxOptionsConsumerBuildItem> {
     private final Consumer<VertxOptions> optionsConsumer;
     private final int priority;
+    private final String deterministicOrderKey;
 
     public VertxOptionsConsumerBuildItem(Consumer<VertxOptions> optionsConsumer, int priority) {
+        this(optionsConsumer, priority, optionsConsumer.getClass().getName());
+    }
+
+    public VertxOptionsConsumerBuildItem(Consumer<VertxOptions> optionsConsumer, int priority, String deterministicOrderKey) {
         this.optionsConsumer = optionsConsumer;
         this.priority = priority;
+        this.deterministicOrderKey = deterministicOrderKey;
     }
 
     public Consumer<VertxOptions> getConsumer() {
@@ -28,6 +34,10 @@ public final class VertxOptionsConsumerBuildItem extends MultiBuildItem implemen
 
     @Override
     public int compareTo(VertxOptionsConsumerBuildItem o) {
-        return Integer.compare(this.priority, o.priority);
+        int priorityResult = Integer.compare(this.priority, o.priority);
+        if (priorityResult != 0) {
+            return priorityResult;
+        }
+        return this.deterministicOrderKey.compareTo(o.deterministicOrderKey);
     }
 }

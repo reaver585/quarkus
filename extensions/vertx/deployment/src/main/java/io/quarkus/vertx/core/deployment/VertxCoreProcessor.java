@@ -7,6 +7,7 @@ import java.lang.management.ManagementFactory;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -462,8 +463,14 @@ class VertxCoreProcessor {
 
     private <T> List<T> loadServices(Class<T> serviceClass) throws IOException, ClassNotFoundException {
         List<T> services = new ArrayList<>();
-        for (Class<?> serviceImplClass : ServiceUtil.classesNamedIn(Thread.currentThread().getContextClassLoader(),
-                "META-INF/services/" + serviceClass.getName())) {
+        // for (Class<?> serviceImplClass : ServiceUtil.classesNamedIn(Thread.currentThread().getContextClassLoader(),
+        //         "META-INF/services/" + serviceClass.getName())) {
+        Iterable<Class<?>> classIterable = ServiceUtil.classesNamedIn(Thread.currentThread().getContextClassLoader(),
+                "META-INF/services/" + serviceClass.getName());
+        List<Class<?>> serviceImplClasses = new ArrayList<>();
+        classIterable.forEach(serviceImplClasses::add);
+        serviceImplClasses.sort(Comparator.comparing(Class::getName));
+        for (Class<?> serviceImplClass : serviceImplClasses) {
             if (!QuarkusClassLoader.isClassPresentAtRuntime(serviceImplClass.getName())) {
                 continue;
             }

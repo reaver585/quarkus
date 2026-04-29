@@ -16,7 +16,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -219,11 +218,11 @@ public class SchedulerProcessor {
                 .sorted(Comparator.comparing(e -> e.getKey().declaringClass().name().toString()
                         + "#" + e.getKey().name() + e.getKey().descriptor()))
                 .forEach(e -> {
-            MethodInfo method = e.getKey();
-            scheduledBusinessMethods.produce(new ScheduledBusinessMethodItem(null, method, e.getValue(),
-                    transformedAnnotations.hasAnnotation(method, SchedulerDotNames.NON_BLOCKING),
-                    transformedAnnotations.hasAnnotation(method, SchedulerDotNames.RUN_ON_VIRTUAL_THREAD)));
-            LOGGER.debugf("Found scheduled static method %s declared on %s", method, method.declaringClass().name());
+                    MethodInfo method = e.getKey();
+                    scheduledBusinessMethods.produce(new ScheduledBusinessMethodItem(null, method, e.getValue(),
+                            transformedAnnotations.hasAnnotation(method, SchedulerDotNames.NON_BLOCKING),
+                            transformedAnnotations.hasAnnotation(method, SchedulerDotNames.RUN_ON_VIRTUAL_THREAD)));
+                    LOGGER.debugf("Found scheduled static method %s declared on %s", method, method.declaringClass().name());
                 });
 
         // Then collect all business methods annotated with @Scheduled

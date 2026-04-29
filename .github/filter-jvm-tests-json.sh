@@ -32,19 +32,20 @@ JSON=$(echo "$JSON" | jq '
   )
 ')
 
-# Step 0: print unfiltered json and exit in case the parameter is '_all_' (full build) or print nothing if empty (no changes)
+# Step 0: resolve module list from impacted modules or full reactor.
 if [ "$1" == '_all_' ]
 then
-  echo \{java: ${JSON}\}
-  exit 0
+  MODULES=$(${PRG_PATH}/list-reactor-modules.sh)
 elif [ -z "$1" ]
 then
   echo -n ''
   exit 0
+else
+  MODULES="$1"
 fi
 
-RUNTIME_MODULES=$(echo -n "$1" | grep -Pv '^(integration-tests|tcks|docs)($|/.*)' || echo '')
-INTEGRATION_TESTS=$(echo -n "$1" | grep -Po '^integration-tests/.+' | grep -Pv '^integration-tests/(devtools|gradle|maven|devmode|kubernetes)($|/.*)' || echo '')
+RUNTIME_MODULES=$(echo -n "$MODULES" | grep -Ev '^(integration-tests|tcks|docs)($|/.*)' || echo '')
+INTEGRATION_TESTS=$(echo -n "$MODULES" | grep -E '^integration-tests/.+' | grep -Ev '^integration-tests/(devtools|gradle|maven|devmode|kubernetes)($|/.*)' || echo '')
 
 if [ -z "$RUNTIME_MODULES" ] && [ -z "$INTEGRATION_TESTS" ]; then
   echo -n ''
@@ -52,23 +53,91 @@ if [ -z "$RUNTIME_MODULES" ] && [ -z "$INTEGRATION_TESTS" ]; then
 fi
 
 if [ -z "$RUNTIME_MODULES" ]; then
-  JSON=$(echo -n $JSON | jq --arg category Runtime 'del( .[] | select(.category == $category) )')
+  JSON=$(echo -n "$JSON" | jq --arg category Runtime 'del( .[] | select(.category == $category) )')
 else
-  RUNTIME_MODULES_COMMAND="-pl\n"
-  for RUNTIME_MODULE in $RUNTIME_MODULES; do
-    RUNTIME_MODULES_COMMAND+="${RUNTIME_MODULE},"
-  done
-  JSON=$(echo -n $JSON | jq --arg category Runtime --arg modules "${RUNTIME_MODULES_COMMAND}" '( .[] | select(.category == $category) ).modules = $modules')
+  RUNTIME_SHARDS=${RUNTIME_SHARDS:-5}
+  RUNTIME_SHARDS_FILE=$(mktemp)
+  export RUNTIME_MODULES
+  python3 - "$RUNTIME_SHARDS" <<'PY' > "$RUNTIME_SHARDS_FILE"
+import json
+import os
+import sys
+
+modules = [m for m in os.environ["RUNTIME_MODULES"].splitlines() if m.strip()]
+shard_count = max(1, int(sys.argv[1]))
+
+shards = [[] for _ in range(shard_count)]
+for index, module in enumerate(modules):
+    shards[index % shard_count].append(module)
+
+print(json.dumps([
+    {
+        "index": i + 1,
+        "modules": "-pl\\n" + ",".join(shard),
+    }
+    for i, shard in enumerate(shards)
+    if shard
+]))
+PY
+  JSON=$(echo -n "$JSON" | jq --arg category Runtime --slurpfile shards "$RUNTIME_SHARDS_FILE" '
+      . as $matrix
+      | [
+          $matrix[] | select(.category != $category)
+        ] + [
+          $matrix[]
+          | select(.category == $category and .["runs-on"] == true) as $template
+          | $shards[0][] as $shard
+          | $template + {
+              name: ($template.name + " - shard " + ($shard.index | tostring)),
+              tag: ($template.tag + "-shard-" + ($shard.index | tostring)),
+              modules: $shard.modules
+            }
+        ]')
+  rm "$RUNTIME_SHARDS_FILE"
 fi
 
 if [ -z "$INTEGRATION_TESTS" ]; then
-  JSON=$(echo -n $JSON | jq --arg category Integration 'del( .[] | select(.category == $category) )')
+  JSON=$(echo -n "$JSON" | jq --arg category Integration 'del( .[] | select(.category == $category) )')
 else
-  INTEGRATION_TESTS_COMMAND="-pl\n"
-  for INTEGRATION_TEST in $INTEGRATION_TESTS; do
-    INTEGRATION_TESTS_COMMAND+="${INTEGRATION_TEST},"
-  done
-  JSON=$(echo -n $JSON | jq --arg category Integration --arg modules "${INTEGRATION_TESTS_COMMAND}" '( .[] | select(.category == $category) ).modules = $modules')
+  INTEGRATION_SHARDS=${INTEGRATION_SHARDS:-5}
+  INTEGRATION_SHARDS_FILE=$(mktemp)
+  export INTEGRATION_TESTS
+  python3 - "$INTEGRATION_SHARDS" <<'PY' > "$INTEGRATION_SHARDS_FILE"
+import json
+import os
+import sys
+
+modules = [m for m in os.environ["INTEGRATION_TESTS"].splitlines() if m.strip()]
+shard_count = max(1, int(sys.argv[1]))
+
+shards = [[] for _ in range(shard_count)]
+for index, module in enumerate(modules):
+    shards[index % shard_count].append(module)
+
+print(json.dumps([
+    {
+        "index": i + 1,
+        "modules": "-pl\\n" + ",".join(shard),
+    }
+    for i, shard in enumerate(shards)
+    if shard
+]))
+PY
+  JSON=$(echo -n "$JSON" | jq --arg category Integration --slurpfile shards "$INTEGRATION_SHARDS_FILE" '
+      . as $matrix
+      | [
+          $matrix[] | select(.category != $category)
+        ] + [
+          $matrix[]
+          | select(.category == $category and .["runs-on"] == true) as $template
+          | $shards[0][] as $shard
+          | $template + {
+              name: ($template.name + " - shard " + ($shard.index | tostring)),
+              tag: ($template.tag + "-shard-" + ($shard.index | tostring)),
+              modules: ("-f\\nintegration-tests\\n" + $shard.modules)
+            }
+        ]')
+  rm "$INTEGRATION_SHARDS_FILE"
 fi
 
-echo \{java: ${JSON}\}
+echo "$JSON" | jq -c '{java: .}'

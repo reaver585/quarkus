@@ -215,13 +215,16 @@ public class SchedulerProcessor {
             }
         }
 
-        for (Entry<MethodInfo, List<AnnotationInstance>> e : staticScheduledMethods.entrySet()) {
+        staticScheduledMethods.entrySet().stream()
+                .sorted(Comparator.comparing(e -> e.getKey().declaringClass().name().toString()
+                        + "#" + e.getKey().name() + e.getKey().descriptor()))
+                .forEach(e -> {
             MethodInfo method = e.getKey();
             scheduledBusinessMethods.produce(new ScheduledBusinessMethodItem(null, method, e.getValue(),
                     transformedAnnotations.hasAnnotation(method, SchedulerDotNames.NON_BLOCKING),
                     transformedAnnotations.hasAnnotation(method, SchedulerDotNames.RUN_ON_VIRTUAL_THREAD)));
             LOGGER.debugf("Found scheduled static method %s declared on %s", method, method.declaringClass().name());
-        }
+                });
 
         // Then collect all business methods annotated with @Scheduled
         for (BeanInfo bean : beanDiscovery.beanStream().classBeans()) {

@@ -55,6 +55,7 @@ import io.quarkus.deployment.builditem.nativeimage.NativeImageConfigBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.logging.LogCleanupFilterBuildItem;
+import io.quarkus.deployment.recording.BytecodeRecorderImpl.ReturnedProxy;
 import io.quarkus.deployment.util.ServiceUtil;
 import io.quarkus.gizmo.Gizmo;
 import io.quarkus.mutiny.deployment.MutinyRuntimeInitBuildItem;
@@ -249,7 +250,8 @@ class VertxCoreProcessor {
         recorder.wrapMainExecutorForMutiny(executorBuildItem.getExecutorProxy());
 
         List<Consumer<VertxOptions>> consumers = vertxOptionsConsumers.stream()
-                .sorted()
+                .sorted(Comparator.comparing((VertxOptionsConsumerBuildItem consumerBuildItem) -> consumerBuildItem)
+                        .thenComparing(consumerBuildItem -> deterministicConsumerKey(consumerBuildItem.getConsumer())))
                 .map(VertxOptionsConsumerBuildItem::getConsumer)
                 .toList();
 
@@ -299,6 +301,13 @@ class VertxCoreProcessor {
     @Record(ExecutionTime.RUNTIME_INIT)
     ThreadFactoryBuildItem createVertxThreadFactory(VertxCoreRecorder recorder, LaunchModeBuildItem launchMode) {
         return new ThreadFactoryBuildItem(recorder.createThreadFactory(launchMode.getLaunchMode()));
+    }
+
+    private static String deterministicConsumerKey(Consumer<VertxOptions> consumer) {
+        if (consumer instanceof ReturnedProxy returnedProxy) {
+            return returnedProxy.__returned$proxy$key();
+        }
+        return consumer.getClass().getName();
     }
 
     @BuildStep

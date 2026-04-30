@@ -411,7 +411,9 @@ public class SchedulerProcessor {
                 .withDebugInfo(false)
                 .withParameters(false);
 
-        for (ScheduledBusinessMethodItem scheduledMethod : scheduledMethods) {
+        for (ScheduledBusinessMethodItem scheduledMethod : scheduledMethods.stream()
+                .sorted(Comparator.comparing(ScheduledBusinessMethodItem::getMethodDescription))
+                .toList()) {
             MutableScheduledMethod metadata = new MutableScheduledMethod();
             String invokerClass = generateInvoker(scheduledMethod, gizmo);
             reflectiveClass.produce(ReflectiveClassBuildItem.builder(invokerClass).constructors().methods().fields().build());

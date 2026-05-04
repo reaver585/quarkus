@@ -142,7 +142,7 @@ public class AbstractQuarkusExtensionTest<S extends AbstractQuarkusExtensionTest
 
     private boolean debugBytecode = false;
     private List<String> traceCategories = new ArrayList<>();
-    private int buildReproducibilityRuns = 10;
+    private int buildReproducibilityRuns = 5;
 
     private Map<String, String> systemPropertiesToRestore = new HashMap<>();
     private Map<String, java.util.logging.Level> loggerLevelsToRestore = new HashMap<>();

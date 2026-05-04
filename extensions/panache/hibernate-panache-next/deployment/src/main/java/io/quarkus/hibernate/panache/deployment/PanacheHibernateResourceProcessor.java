@@ -1,13 +1,13 @@
 package io.quarkus.hibernate.panache.deployment;
 
 import static io.quarkus.hibernate.panache.deployment.EntityToPersistenceUnitUtil.determineEntityPersistenceUnits;
-import static io.quarkus.security.spi.SecuredInterfaceAnnotationBuildItem.ofMethodAnnotation;
 import static io.quarkus.security.spi.SecurityTransformerBuildItem.createSecurityTransformer;
 
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;

@@ -85,6 +85,12 @@ interface PermissionSecurityChecks {
         private static final String IS_GRANTED = "isGranted";
         private static final DotName SECURITY_IDENTITY_NAME = DotName.createSimple(SecurityIdentity.class);
         private static final String SECURED_METHOD_PARAMETER = "securedMethodParameter";
+        private static final Comparator<Map.Entry<PermissionNameAndChecker, Set<String>>> PERMISSION_TO_ACTION_COMPARATOR = Comparator
+                .comparing((Map.Entry<PermissionNameAndChecker, Set<String>> e) -> e.getKey().permissionName())
+                .thenComparing(e -> {
+                    var checker = e.getKey().checker();
+                    return checker != null ? checker.generatedClassName() : "";
+                });
         private final Map<AnnotationTarget, List<List<PermissionKey>>> targetToPermissionKeys = new HashMap<>();
         private final Map<AnnotationTarget, LogicalAndPermissionPredicate> targetToPredicate = new HashMap<>();
         private final Map<String, MethodInfo> classSignatureToConstructor = new HashMap<>();
@@ -575,12 +581,13 @@ interface PermissionSecurityChecks {
                     .orElse(null);
         }
 
+        // @PermissionsAllowed value is in format permission:action, permission2:action, permission:action2, permission3
+        // here we transform it to permission -> actions
+        record PermissionNameAndChecker(String permissionName, PermissionCheckerMetadata checker) {
+        }
+
         private <T extends AnnotationTarget> void gatherPermissionKeys(AnnotationInstance instance, T annotationTarget,
                 List<PermissionKey> cache, Map<T, List<List<PermissionKey>>> targetToPermissionKeys) {
-            // @PermissionsAllowed value is in format permission:action, permission2:action, permission:action2, permission3
-            // here we transform it to permission -> actions
-            record PermissionNameAndChecker(String permissionName, PermissionCheckerMetadata checker) {
-            }
             boolean foundPermissionChecker = false;
             final var permissionToActions = new HashMap<PermissionNameAndChecker, Set<String>>();
             for (String permissionValExpression : instance.value().asStringArray()) {
@@ -683,8 +690,8 @@ interface PermissionSecurityChecks {
                 }
             }
 
-            for (var permissionToAction : permissionToActions.entrySet().stream()
-                    .sorted(Comparator.comparing(e -> e.getKey().permissionName())).toList()) {
+            for (var permissionToAction : permissionToActions.entrySet().stream().sorted(PERMISSION_TO_ACTION_COMPARATOR)
+                    .toList()) {
                 final var permissionNameKey = permissionToAction.getKey();
                 final var permissionActions = permissionToAction.getValue();
                 final var key = new PermissionKey(permissionNameKey.permissionName, permissionActions, params, classType,
@@ -1704,17 +1711,23 @@ interface PermissionSecurityChecks {
 
         private String createConverterName(MethodInfo securedMethod, int idx) {
             // postfix enumeration is required because same secured method may require multiple converters
-            var converterName = hashCodeToString(securedMethod.hashCode()) + "_" + idx;
+            var converterName = (securedMethod.declaringClass().name()
+                    + "_"
+                    + securedMethod.name()
+                    + securedMethod.parameterTypes()
+                            .stream()
+                            .map(Type::name)
+                            .map(DotName::toString)
+                            .collect(Collectors.joining("_", "_", "")))
+                    .replace('.', '_')
+                    + "_"
+                    + idx;
             if (converterNameToMethodHandle.containsKey(converterName)) {
                 return createConverterName(securedMethod, idx + 1);
             }
             return converterName;
         }
 
-    }
-
-    private static String hashCodeToString(Object object) {
-        return (object.hashCode() + "").replace('-', '_');
     }
 
     private static String toFieldGetter(String paramExpression) {

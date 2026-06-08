@@ -1,7 +1,7 @@
 package io.quarkus.hibernate.panache.deployment;
 
+import static io.quarkus.arc.processor.Reproducibility.CLASS_COMPARATOR;
 import static io.quarkus.hibernate.panache.deployment.EntityToPersistenceUnitUtil.determineEntityPersistenceUnits;
-import static io.quarkus.security.spi.SecuredInterfaceAnnotationBuildItem.ofMethodAnnotation;
 import static io.quarkus.security.spi.SecurityTransformerBuildItem.createSecurityTransformer;
 
 import java.lang.reflect.Modifier;
@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -218,7 +219,7 @@ public final class PanacheHibernateResourceProcessor {
             Capabilities capabilities) throws ClassNotFoundException {
         // PU
         // FIXME: for now, this ignores the reactive PUs, but reactive PUs are not supported yet by Panache Reactive
-        Map<String, String> map = new HashMap<>();
+        Map<String, String> map = new LinkedHashMap<>();
         for (EntityToPersistenceUnitBuildItem item : items) {
             map.put(item.getEntityClass(), item.getPersistenceUnitName());
         }
@@ -228,8 +229,9 @@ public final class PanacheHibernateResourceProcessor {
                         .orElse(false),
                 capabilities.isPresent(Capability.HIBERNATE_REACTIVE));
         // Panache 2 repos
-        Map<Class<?>, Class<?>> repositoryClassesToEntityClasses = new HashMap<>();
-        for (ClassInfo classInfo : index.getIndex().getAllKnownImplementations(DOTNAME_PANACHE_REPOSITORY_SWITCHER)) {
+        Map<Class<?>, Class<?>> repositoryClassesToEntityClasses = new LinkedHashMap<>();
+        for (ClassInfo classInfo : index.getIndex().getAllKnownImplementations(DOTNAME_PANACHE_REPOSITORY_SWITCHER).stream()
+                .sorted(CLASS_COMPARATOR).toList()) {
             // Only keep concrete classes
             if (classInfo.isInterface() || classInfo.isAbstract()) {
                 continue;

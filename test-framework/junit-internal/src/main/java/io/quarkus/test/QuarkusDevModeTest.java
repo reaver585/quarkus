@@ -110,7 +110,7 @@ import io.smallrye.config.SmallRyeConfigBuilder;
 public class QuarkusDevModeTest
         implements BeforeAllCallback, AfterAllCallback, BeforeEachCallback, AfterEachCallback, ParameterResolver {
 
-    private static final String REPRODUCIBILITY_CHECK_PROPERTY_NAME = "quarkus.test.reproducibility-check";
+    private static final String REPRODUCIBILITY_CHECK_PROPERTY_NAME = "quarkus-internal.test.reproducibility-check";
     private static final Logger rootLogger;
     public static final OpenOption[] OPEN_OPTIONS = { StandardOpenOption.SYNC, StandardOpenOption.CREATE,
             StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE };

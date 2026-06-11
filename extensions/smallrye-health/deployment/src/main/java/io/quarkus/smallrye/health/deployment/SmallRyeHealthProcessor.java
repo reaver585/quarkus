@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -70,7 +69,6 @@ import io.quarkus.vertx.http.deployment.RouteBuildItem;
 import io.quarkus.vertx.http.deployment.webjar.WebJarBuildItem;
 import io.quarkus.vertx.http.deployment.webjar.WebJarResourcesFilter;
 import io.quarkus.vertx.http.deployment.webjar.WebJarResultsBuildItem;
-import io.quarkus.vertx.http.runtime.devmode.FileSystemStaticHandler;
 import io.quarkus.vertx.http.runtime.management.ManagementInterfaceBuildTimeConfig;
 import io.smallrye.health.AsyncHealthCheckFactory;
 import io.smallrye.health.SmallRyeHealthReporter;
@@ -433,13 +431,8 @@ class SmallRyeHealthProcessor {
             smallryeHealthBuildProducer
                     .produce(new SmallRyeHealthBuildItem(result.getFinalDestination(), healthUiPath));
 
-            List<FileSystemStaticHandler.StaticWebRootConfiguration> webRootConfigurations = result.getWebRootConfigurations()
-                    .stream().sorted(
-                            Comparator.comparing(FileSystemStaticHandler.StaticWebRootConfiguration::getFileSystem)
-                                    .thenComparing(FileSystemStaticHandler.StaticWebRootConfiguration::getWebRoot))
-                    .toList();
             Handler<RoutingContext> handler = recorder.uiHandler(result.getFinalDestination(),
-                    healthUiPath, webRootConfigurations, shutdownContext);
+                    healthUiPath, result.getWebRootConfigurations(), shutdownContext);
 
             routeProducer.produce(nonApplicationRootPathBuildItem.routeBuilder()
                     .management(CONFIG_KEY_HEALTH_MANAGEMENT_ENABLED)

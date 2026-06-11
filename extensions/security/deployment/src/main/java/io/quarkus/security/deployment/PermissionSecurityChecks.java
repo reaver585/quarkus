@@ -20,7 +20,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -86,8 +85,8 @@ interface PermissionSecurityChecks {
         private static final String IS_GRANTED = "isGranted";
         private static final DotName SECURITY_IDENTITY_NAME = DotName.createSimple(SecurityIdentity.class);
         private static final String SECURED_METHOD_PARAMETER = "securedMethodParameter";
-        private final Map<AnnotationTarget, List<List<PermissionKey>>> targetToPermissionKeys = new LinkedHashMap<>();
-        private final Map<AnnotationTarget, LogicalAndPermissionPredicate> targetToPredicate = new LinkedHashMap<>();
+        private final Map<AnnotationTarget, List<List<PermissionKey>>> targetToPermissionKeys = new HashMap<>();
+        private final Map<AnnotationTarget, LogicalAndPermissionPredicate> targetToPredicate = new HashMap<>();
         private final Map<String, MethodInfo> classSignatureToConstructor = new HashMap<>();
         private final IndexView index;
         private final List<AnnotationInstance> permissionInstances;
@@ -254,12 +253,7 @@ interface PermissionSecurityChecks {
             final Map<LogicalAndPermissionPredicate, SecurityCheck> cache = new HashMap<>();
             final Map<MethodInfo, SecurityCheck> methodToCheck = new HashMap<>();
             final Map<DotName, SecurityCheck> classNameToCheck = new HashMap<>();
-            // TODO: DRY -> extract sorting logic into a static method?
-            List<Map.Entry<AnnotationTarget, LogicalAndPermissionPredicate>> sortedPredicateEntries = targetToPredicate
-                    .entrySet().stream().sorted(
-                            Comparator.comparing(e -> toSortKey(e.getKey())))
-                    .toList();
-            for (var targetToPredicate : sortedPredicateEntries) {
+            for (var targetToPredicate : targetToPredicate.entrySet()) {
                 SecurityCheck check = cache.computeIfAbsent(targetToPredicate.getValue(), this::createSecurityCheck);
 
                 var annotationTarget = targetToPredicate.getKey();
@@ -311,11 +305,7 @@ interface PermissionSecurityChecks {
          */
         PermissionSecurityChecksBuilder createPermissionPredicates() {
             Map<PermissionCacheKey, PermissionWrapper> permissionCache = new HashMap<>();
-            List<Map.Entry<AnnotationTarget, List<List<PermissionKey>>>> sortedEntries = targetToPermissionKeys.entrySet()
-                    .stream().sorted(
-                            Comparator.comparing(e -> toSortKey(e.getKey())))
-                    .toList();
-            for (var entry : sortedEntries) {
+            for (var entry : targetToPermissionKeys.entrySet()) {
                 final AnnotationTarget securedTarget = entry.getKey();
                 final LogicalAndPermissionPredicate predicate = new LogicalAndPermissionPredicate();
 
@@ -693,16 +683,8 @@ interface PermissionSecurityChecks {
                 }
             }
 
-            List<Map.Entry<PermissionNameAndChecker, Set<String>>> sortedPermissionToActions = permissionToActions.entrySet()
-                    .stream()
-                    .sorted(Comparator.comparing((Map.Entry<PermissionNameAndChecker, Set<String>> e) -> e.getKey()
-                            .permissionName())
-                            .thenComparing(e -> {
-                                var checker = e.getKey().checker();
-                                return checker != null ? checker.generatedClassName() : "";
-                            }))
-                    .toList();
-            for (var permissionToAction : sortedPermissionToActions) {
+            for (var permissionToAction : permissionToActions.entrySet().stream()
+                    .sorted(Comparator.comparing(e -> e.getKey().permissionName())).toList()) {
                 final var permissionNameKey = permissionToAction.getKey();
                 final var permissionActions = permissionToAction.getValue();
                 final var key = new PermissionKey(permissionNameKey.permissionName, permissionActions, params, classType,
@@ -970,27 +952,6 @@ interface PermissionSecurityChecks {
             if (annotationTarget.kind() == AnnotationTarget.Kind.METHOD) {
                 var method = annotationTarget.asMethod();
                 return method.declaringClass().toString() + "#" + method.name();
-            }
-            return annotationTarget.asClass().name().toString();
-        }
-
-        /**
-         * Like {@link #toString(AnnotationTarget)} but includes parameter types so that
-         * overloaded methods produce distinct keys. Used for deterministic sorting only.
-         */
-        private static String toSortKey(AnnotationTarget annotationTarget) {
-            if (annotationTarget.kind() == AnnotationTarget.Kind.METHOD) {
-                var method = annotationTarget.asMethod();
-                var sb = new StringBuilder();
-                sb.append(method.declaringClass()).append('#').append(method.name()).append('(');
-                for (int i = 0; i < method.parametersCount(); i++) {
-                    if (i > 0) {
-                        sb.append(',');
-                    }
-                    sb.append(method.parameterType(i).name());
-                }
-                sb.append(')');
-                return sb.toString();
             }
             return annotationTarget.asClass().name().toString();
         }
@@ -1743,23 +1704,17 @@ interface PermissionSecurityChecks {
 
         private String createConverterName(MethodInfo securedMethod, int idx) {
             // postfix enumeration is required because same secured method may require multiple converters
-            var converterName = (securedMethod.declaringClass().name()
-                    + "_"
-                    + securedMethod.name()
-                    + securedMethod.parameterTypes()
-                            .stream()
-                            .map(Type::name)
-                            .map(DotName::toString)
-                            .collect(Collectors.joining("_", "_", "")))
-                    .replace('.', '_')
-                    + "_"
-                    + idx;
+            var converterName = hashCodeToString(securedMethod.hashCode()) + "_" + idx;
             if (converterNameToMethodHandle.containsKey(converterName)) {
                 return createConverterName(securedMethod, idx + 1);
             }
             return converterName;
         }
 
+    }
+
+    private static String hashCodeToString(Object object) {
+        return (object.hashCode() + "").replace('-', '_');
     }
 
     private static String toFieldGetter(String paramExpression) {

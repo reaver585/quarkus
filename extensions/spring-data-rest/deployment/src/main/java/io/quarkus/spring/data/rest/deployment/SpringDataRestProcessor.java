@@ -144,6 +144,7 @@ class SpringDataRestProcessor {
     private Set<ClassInfo> getRepositoriesToImplement(IndexView indexView, DotName... repositoryInterfaces) {
         Set<ClassInfo> result = new LinkedHashSet<>();
         for (DotName repositoryInterface : repositoryInterfaces) {
+            // TODO: check if order becomes unstable here
             for (ClassInfo classInfo : indexView.getKnownDirectImplementors(repositoryInterface)) {
                 if (!hasImplementors(indexView, classInfo) && !EXCLUDED_INTERFACES.contains(classInfo.name())) {
                     validateResource(classInfo);

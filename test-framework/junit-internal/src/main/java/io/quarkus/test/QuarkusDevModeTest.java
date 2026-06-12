@@ -44,10 +44,10 @@ import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
-import org.junit.jupiter.api.extension.ExtensionContext.Namespace;
 import org.junit.jupiter.api.extension.ParameterContext;
 import org.junit.jupiter.api.extension.ParameterResolutionException;
 import org.junit.jupiter.api.extension.ParameterResolver;
+import org.opentest4j.TestAbortedException;
 
 import io.quarkus.bootstrap.BootstrapAppModelFactory;
 import io.quarkus.bootstrap.BootstrapException;
@@ -110,6 +110,7 @@ import io.smallrye.config.SmallRyeConfigBuilder;
 public class QuarkusDevModeTest
         implements BeforeAllCallback, AfterAllCallback, BeforeEachCallback, AfterEachCallback, ParameterResolver {
 
+    private static final String REPRODUCIBILITY_CHECK_PROPERTY_NAME = "quarkus.test.reproducibility-check";
     private static final Logger rootLogger;
     public static final OpenOption[] OPEN_OPTIONS = { StandardOpenOption.SYNC, StandardOpenOption.CREATE,
             StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE };
@@ -249,6 +250,13 @@ public class QuarkusDevModeTest
         GroovyClassValue.disable();
         originalRootLoggerHandlers = rootLogger.getHandlers();
         rootLogger.addHandler(inMemoryLogHandler);
+        String reproducibilityProp = System.getProperty(REPRODUCIBILITY_CHECK_PROPERTY_NAME);
+        boolean reproducibilityCheck = reproducibilityProp != null;
+        if (reproducibilityCheck) {
+            // skip tests
+            throw new TestAbortedException(
+                    "Skipping QuarkusDevModeTest tests because " + REPRODUCIBILITY_CHECK_PROPERTY_NAME + " is set.");
+        }
     }
 
     @Override

@@ -7,6 +7,9 @@ permissions:
 on:
   schedule:
     - cron: '0 3 * * *'
+  push:
+    branches:
+      - '**'
   workflow_dispatch:
 
 concurrency:
@@ -25,7 +28,7 @@ jobs:
   reproducibility-check:
     name: ${{ matrix.name }}
     runs-on: ubuntu-latest
-    if: github.repository == 'quarkusio/quarkus' || github.event_name == 'workflow_dispatch'
+    if: github.repository == 'quarkusio/quarkus' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     timeout-minutes: 360
     strategy:
       fail-fast: false

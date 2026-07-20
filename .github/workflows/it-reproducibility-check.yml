@@ -9,6 +9,9 @@ on:
     # Offset from the deployment reproducibility check (03:00) to avoid runner contention.
     - cron: '0 4 * * *'
   workflow_dispatch:
+  push:
+    branches:
+      - '**'
 
 concurrency:
   group: "workflow = ${{ github.workflow }}, ref = ${{ github.event.ref }}"
@@ -25,7 +28,7 @@ jobs:
   it-reproducibility-check:
     name: Integration Test Reproducibility Check
     runs-on: ubuntu-latest
-    if: github.repository == 'quarkusio/quarkus' || github.event_name == 'workflow_dispatch'
+    if: github.repository == 'quarkusio/quarkus' || github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
